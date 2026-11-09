@@ -20,6 +20,11 @@ import random
 import time
 from collections import deque
 
+# Active / désactive le mouvement 2-opt dans le voisinage.
+# Sur nos tests (100 clients aléatoires) il n'améliorait pas le coût :
+# on le laisse en OPTION pour le comparer sur les instances VRPLIB.
+UTILISER_2OPT = False
+
 
 # =============================================================================
 # 1. DONNÉES DE L'INSTANCE
@@ -149,13 +154,32 @@ def grasp_construction(alpha=0.3):
 # =============================================================================
 # Workshop : un voisin = on inverse UN objet du sac.
 # Ici      : un voisin = on DÉPLACE UN client (relocate)
-#            ou on ÉCHANGE deux clients (swap).
-# On renvoie aussi le "mouvement" pour la liste tabou.
+#            ou on ÉCHANGE deux clients (swap)
+#            ou on INVERSE un morceau de tournée (2-opt).
+#
+# ACCÉLÉRATION (version 2) :
+#   Avant, pour chaque voisin on recopiait TOUTE la solution puis on
+#   recalculait TOUT le coût  => O(n) par voisin, beaucoup trop lent.
+#   Maintenant, un voisin n'est plus une solution complète mais un MOUVEMENT
+#   (quelques indices). Son coût se calcule par DIFFÉRENCE (delta) avec
+#   seulement 3 ou 4 distances => O(1) par voisin.
+#   On ne vérifie la validité (capacité / fenêtres) QUE si le mouvement est
+#   intéressant, et on ne construit la nouvelle solution QUE pour le
+#   mouvement finalement choisi.
+
+def autour(tournee, p):
+    """Renvoie (précédent, suivant) du client en position p (0 = dépôt)."""
+    prec = tournee[p - 1] if p > 0 else 0
+    suiv = tournee[p + 1] if p < len(tournee) - 1 else 0
+    return prec, suiv
+
 
 def voisinage(solution, taille_echantillon=None):
     """
-    Générateur de voisins valides : (voisin, mouvement).
-    mouvement = client déplacé (c'est lui qu'on rendra tabou).
+    Générateur de mouvements : (delta, mouvement).
+      delta     = nouveau coût - coût actuel (négatif = amélioration)
+      mouvement = ("relocate" | "swap" | "2opt", r1, p1, r2, p2)
+    ATTENTION : la validité n'est PAS vérifiée ici (voir mouvement_valide).
     taille_echantillon : pour les grandes instances, on ne teste qu'un
     échantillon aléatoire de clients (sinon le voisinage est énorme).
     """
@@ -164,31 +188,109 @@ def voisinage(solution, taille_echantillon=None):
         tous_clients = random.sample(tous_clients, taille_echantillon)
 
     for (r1, p1) in tous_clients:
-        client = solution[r1][p1]
+        t1 = solution[r1]
+        c = t1[p1]
+        a, b = autour(t1, p1)
+        # gain obtenu en retirant c :  a -> c -> b  devient  a -> b
+        delta_retrait = dist[a][b] - dist[a][c] - dist[c][b]
 
-        # ----- RELOCATE : on retire 'client' et on le remet ailleurs -----
+        # ----- RELOCATE : on retire c et on le remet entre x et y -----
         for r2 in range(len(solution) + 1):          # +1 = ouvrir un nouveau camion
-            if r2 == len(solution) and len(solution[r1]) == 1:
-                continue                             # inutile : même solution
-            dest = solution[r2] if r2 < len(solution) else []
-            for p2 in range(len(dest) + 1):
+            if r2 == len(solution):
+                if len(t1) > 1:                      # nouveau camion : 0 -> c -> 0
+                    yield delta_retrait + 2 * dist[0][c], ("relocate", r1, p1, r2, 0)
+                continue
+            t2 = solution[r2]
+            for p2 in range(len(t2) + 1):            # insertion AVANT la position p2
                 if r1 == r2 and (p2 == p1 or p2 == p1 + 1):
                     continue                         # même position
-                # copie légère : on ne recopie que les tournées modifiées
-                voisin = [t[:] for t in solution] + ([[]] if r2 == len(solution) else [])
-                voisin[r1].pop(p1)
-                p2_ajuste = p2 - 1 if (r1 == r2 and p2 > p1) else p2
-                voisin[r2].insert(p2_ajuste, client)
-                if tournee_valide(voisin[r1]) and tournee_valide(voisin[r2]):
-                    yield [t for t in voisin if t], client
+                x = t2[p2 - 1] if p2 > 0 else 0
+                y = t2[p2] if p2 < len(t2) else 0
+                if r1 == r2:                         # même tournée : c n'est plus là
+                    if x == c:
+                        x = a
+                    if y == c:
+                        y = b
+                # coût ajouté en insérant c :  x -> y  devient  x -> c -> y
+                delta_insert = dist[x][c] + dist[c][y] - dist[x][y]
+                yield delta_retrait + delta_insert, ("relocate", r1, p1, r2, p2)
 
-        # ----- SWAP : on échange 'client' avec un client d'une autre tournée -----
+        # ----- SWAP : on échange c avec un client d d'une autre tournée -----
         for r2 in range(r1 + 1, len(solution)):
-            for p2 in range(len(solution[r2])):
-                voisin = [t[:] for t in solution]
-                voisin[r1][p1], voisin[r2][p2] = voisin[r2][p2], voisin[r1][p1]
-                if tournee_valide(voisin[r1]) and tournee_valide(voisin[r2]):
-                    yield voisin, client
+            t2 = solution[r2]
+            for p2 in range(len(t2)):
+                d = t2[p2]
+                e, f = autour(t2, p2)
+                delta = (dist[a][d] + dist[d][b] - dist[a][c] - dist[c][b]
+                         + dist[e][c] + dist[c][f] - dist[e][d] - dist[d][f])
+                yield delta, ("swap", r1, p1, r2, p2)
+
+        # ----- 2-OPT : on inverse le morceau t1[p1..p2] DANS la même tournée -----
+        #   a -> [c ... e] -> f   devient   a -> [e ... c] -> f
+        #   seuls 2 arcs changent : (a,c) et (e,f) sont remplacés par (a,e) et (c,f)
+        #   (le morceau du milieu garde la même longueur car dist est symétrique)
+        if not UTILISER_2OPT:
+            continue
+        for p2 in range(p1 + 1, len(t1)):
+            e = t1[p2]
+            f = t1[p2 + 1] if p2 < len(t1) - 1 else 0
+            delta = dist[a][e] + dist[c][f] - dist[a][c] - dist[e][f]
+            yield delta, ("2opt", r1, p1, r1, p2)
+
+
+def tournees_modifiees(solution, mouvement):
+    """
+    Construit UNIQUEMENT les tournées touchées par le mouvement.
+    Renvoie un dict {indice_tournee: nouvelle_tournee}.
+    """
+    type_mvt, r1, p1, r2, p2 = mouvement
+    if type_mvt == "swap":
+        t1, t2 = solution[r1][:], solution[r2][:]
+        t1[p1], t2[p2] = t2[p2], t1[p1]
+        return {r1: t1, r2: t2}
+
+    if type_mvt == "2opt":
+        t = solution[r1]
+        # on garde le début, on inverse le morceau [p1..p2], on garde la fin
+        return {r1: t[:p1] + t[p1:p2 + 1][::-1] + t[p2 + 1:]}
+
+    # relocate
+    c = solution[r1][p1]
+    t1 = solution[r1][:p1] + solution[r1][p1 + 1:]
+    if r1 == r2:
+        p2 = p2 - 1 if p2 > p1 else p2   # les positions ont glissé d'un cran
+        t1.insert(p2, c)
+        return {r1: t1}
+    t2 = solution[r2][:] if r2 < len(solution) else []
+    t2.insert(p2, c)
+    return {r1: t1, r2: t2}
+
+
+def clients_touches(solution, mouvement):
+    """
+    Clients concernés par le mouvement (ce sont eux qu'on rend tabou).
+      relocate : le client déplacé
+      swap     : les 2 clients échangés
+      2-opt    : les 2 extrémités du morceau inversé
+    Sans ça, le 2-opt pourrait ré-inverser le morceau juste après => boucle.
+    """
+    type_mvt, r1, p1, r2, p2 = mouvement
+    if type_mvt == "relocate":
+        return (solution[r1][p1],)
+    return (solution[r1][p1], solution[r2][p2])
+
+
+def mouvement_valide(solution, mouvement):
+    """Vérifie capacité + fenêtres sur les seules tournées modifiées."""
+    return all(tournee_valide(t) for t in tournees_modifiees(solution, mouvement).values())
+
+
+def appliquer_mouvement(solution, mouvement):
+    """Renvoie la nouvelle solution (on ne recopie que les tournées touchées)."""
+    nouvelle = solution[:] + [[]]        # [[]] : place pour un éventuel nouveau camion
+    for r, t in tournees_modifiees(solution, mouvement).items():
+        nouvelle[r] = t
+    return [t for t in nouvelle if t]    # on retire les tournées vides
 
 
 # =============================================================================
@@ -209,31 +311,39 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
     liste_tabou = deque(maxlen=taille_tabou)
 
     solution_courante = solution_initiale
+    cout_courant = cout_solution(solution_initiale)   # calculé UNE seule fois
     meilleure_globale = solution_initiale
-    cout_meilleure_globale = cout_solution(solution_initiale)
+    cout_meilleure_globale = cout_courant
 
     nb_iter = 0
     while nb_iter < iter_max:
-        meilleur_voisin, cout_meilleur, mouvement = None, float("inf"), None
+        meilleur_mvt, delta_meilleur = None, float("inf")
 
-        for voisin, client in voisinage(solution_courante, taille_echantillon):
-            c = cout_solution(voisin)
-            # Critère d'ASPIRATION : un mouvement tabou est accepté s'il bat le record
-            autorise = client not in liste_tabou or c < cout_meilleure_globale
-            if autorise and c < cout_meilleur:
-                meilleur_voisin, cout_meilleur, mouvement = voisin, c, client
+        for delta, mvt in voisinage(solution_courante, taille_echantillon):
+            # 1) test rapide sur le coût AVANT le test de validité (plus cher)
+            if delta >= delta_meilleur:
+                continue
+            # 2) Critère d'ASPIRATION : un mouvement tabou est accepté s'il bat le record
+            est_tabou = any(cl in liste_tabou
+                            for cl in clients_touches(solution_courante, mvt))
+            autorise = (not est_tabou
+                        or cout_courant + delta < cout_meilleure_globale - 1e-9)
+            # 3) seulement maintenant on vérifie capacité / fenêtres
+            if autorise and mouvement_valide(solution_courante, mvt):
+                meilleur_mvt, delta_meilleur = mvt, delta
 
-        if meilleur_voisin is None:      # aucun voisin possible
+        if meilleur_mvt is None:         # aucun voisin possible
             break
 
-        # on passe au meilleur voisin non tabou
-        solution_courante = meilleur_voisin
-        liste_tabou.append(mouvement)
+        # on passe au meilleur voisin non tabou (et on rend tabou les clients touchés)
+        liste_tabou.extend(clients_touches(solution_courante, meilleur_mvt))
+        solution_courante = appliquer_mouvement(solution_courante, meilleur_mvt)
+        cout_courant += delta_meilleur   # mise à jour du coût par différence
 
         # mise à jour du record
-        if cout_meilleur < cout_meilleure_globale - 1e-9:
-            meilleure_globale = meilleur_voisin
-            cout_meilleure_globale = cout_meilleur
+        if cout_courant < cout_meilleure_globale - 1e-9:
+            meilleure_globale = solution_courante
+            cout_meilleure_globale = cout_courant
             nb_iter = 0
         else:
             nb_iter += 1
