@@ -11,8 +11,10 @@ Prérequis :
 """
 
 import math
+import os
 import random
 import time
+import urllib.request
 
 import vrplib
 import grasp_tabou_cvrptw as g   # notre code GRASP + Tabou
@@ -21,8 +23,26 @@ import grasp_tabou_cvrptw as g   # notre code GRASP + Tabou
 # -----------------------------------------------------------------------------
 # 1. Charger une instance VRPLIB dans notre code
 # -----------------------------------------------------------------------------
+URL = "https://raw.githubusercontent.com/PyVRP/Instances/main/"
+
+
+def telecharger(nom):
+    """
+    Télécharge instances/<nom>.vrp et .sol depuis le dépôt PyVRP/Instances
+    s'ils ne sont pas déjà là (utile sur Colab, où le dossier est vide).
+    Les instances X sont dans CVRP/, les instances Solomon dans VRPTW/Solomon/.
+    """
+    os.makedirs("instances", exist_ok=True)
+    dossier = "CVRP/" if nom.startswith("X-") else "VRPTW/Solomon/"
+    for ext in ("vrp", "sol"):
+        fichier = f"instances/{nom}.{ext}"
+        if not os.path.exists(fichier):
+            urllib.request.urlretrieve(URL + dossier + f"{nom}.{ext}", fichier)
+
+
 def charger_vrplib(nom):
     """Lit instances/<nom>.vrp et .sol, prépare g, renvoie le coût optimal."""
+    telecharger(nom)
     inst = vrplib.read_instance(f"instances/{nom}.vrp")
     bks = vrplib.read_solution(f"instances/{nom}.sol")["cost"]
 
@@ -81,7 +101,8 @@ if __name__ == "__main__":
     import pandas as pd
 
     # temps par instance en secondes : python benchmark_vrplib.py 60
-    TEMPS = int(sys.argv[1]) if len(sys.argv) > 1 else 20
+    # (dans Colab, sys.argv[1] vaut "-f" : on garde alors 20 s)
+    TEMPS = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 20
 
     instances = [
         # C = clients groupés, R = aléatoires, RC = mixte
