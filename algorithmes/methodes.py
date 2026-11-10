@@ -65,7 +65,7 @@ def tabou(instance, temps_max=30, graine=0, suivi=None,
 
 
 def grasp(instance, temps_max=30, graine=0, suivi=None,
-          alpha=0.2, taille_tabou=10, iter_max=30, taille_echantillon=25):
+          alpha=0.1, taille_tabou=10, iter_max=30, taille_echantillon=25):
     """Multi-start : construction randomisée + tabou court, répétés jusqu'à la fin du temps ;
     on garde la meilleure solution. Valeurs par défaut : celles du benchmark de l'équipe."""
     random.seed(graine)

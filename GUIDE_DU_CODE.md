@@ -136,8 +136,8 @@ fichier est utilisé seul (notebook, benchmark) :
 * **`# AMÉLIORATION`** : `proches[i]` = les 40 clients les plus proches de i. La construction
   les regarde en premier, et le voisinage ne déplace un client que vers les tournées qui
   passent près de lui. C'est la piste « voisinage aux k plus proches voisins » du bilan du
-  notebook : sur 12 instances (10 s), le gap moyen passe de 7,6 % à 5,7 % (tabou) et de
-  43,7 % à 6,8 % (GRASP).
+  notebook : sur 12 instances (10 s, alpha = 0,2), le gap moyen passe de 7,6 % à 5,7 % (tabou)
+  et de 43,7 % à 6,8 % (GRASP).
 
 ### `plne.py` : la méthode exacte
 
@@ -162,7 +162,8 @@ petites instances et à vérifier que les métaheuristiques le retrouvent.
 
 Toutes ont la même forme : `methode(instance, temps_max, graine, suivi) → routes`. Les
 paramètres (`alpha`, `taille_tabou`, `iter_max`, `taille_echantillon`) ont les valeurs par
-défaut du benchmark de l'équipe et peuvent varier dans l'étude de sensibilité.
+défaut du benchmark de l'équipe (dont alpha = 0,1, le meilleur réglage de l'étude de
+sensibilité) et peuvent varier dans l'étude de sensibilité.
 
 ---
 
@@ -226,7 +227,8 @@ solution a été trouvée.
 * `tester(nom, graine, temps_max, …)` lance GRASP + tabou et renvoie une ligne de résultat
   (coût, BKS, gap, temps, validité).
 * `python benchmark_vrplib.py 20` : les 20 instances (18 Solomon, 2 X), 20 s chacune ;
-  écrit `resultats/resultats_20s.csv` et `resultats/gap_par_instance_20s.png`.
+  écrit `resultats/resultats_20s.csv` et `resultats/gap_par_instance_20s.png`. Les résultats
+  avec l'ancien réglage (alpha = 0,2) sont gardés dans les fichiers `..._alpha02`.
 
 ### `etude_statistique.py`
 

@@ -79,10 +79,12 @@ Règle de rangement : **à la racine, ce qu'on lance ; dans les dossiers, le cod
 ## Résultats en bref
 
 * **Benchmark VRPLIB du notebook** (20 instances Solomon et X, 20 s, une graine) :
-  gap moyen **4,98 %**, 15 instances sur 20 sous 7 %, toutes les solutions valides.
+  gap moyen **3,34 %** avec alpha = 0,1 (4,98 % avec alpha = 0,2), **19 instances sur 20
+  sous 7 %**, toutes les solutions valides.
 * **Amélioration « 40 voisins les plus proches »** (12 instances de 100 à 3 000 clients,
-  10 s) : gap moyen de la recherche tabou **7,6 % → 5,7 %**, du GRASP **43,7 % → 6,8 %**.
-* **Points faibles** : fenêtres larges (familles R2 et RC2) et très grandes instances avec
+  10 s, alpha = 0,2) : gap moyen de la recherche tabou **7,6 % → 5,7 %**, du GRASP
+  **43,7 % → 6,8 %**. Elle sert surtout aux grandes instances.
+* **Points faibles** : fenêtres larges (R205 reste à 8,7 %) et très grandes instances avec
   fenêtres serrées (R1_10_1, 1 000 clients : environ 19 %).
 
 Le détail et l'analyse sont dans le notebook.
