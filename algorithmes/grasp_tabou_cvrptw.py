@@ -20,16 +20,26 @@ import random
 import time
 from collections import deque
 
+import numpy as np
+
 # Active / désactive le mouvement 2-opt dans le voisinage.
 # Sur nos tests (100 clients aléatoires) il n'améliorait pas le coût :
 # on le laisse en OPTION pour le comparer sur les instances VRPLIB.
 UTILISER_2OPT = False
 
+# Voisinage restreint : pour chaque client, on ne regarde que ses K plus proches
+# voisins (insertion à côté d'eux, échange avec eux) au lieu de TOUS les clients.
+# Indispensable pour les grandes instances. None = voisinage complet.
+# On ne l'active qu'au-delà de SEUIL_KNN clients : sur les petites instances
+# avec fenêtres de temps, la bonne place d'un client n'est pas toujours à côté
+# de ses voisins géographiques (testé : RC2 passait de 5,2 % à 8,4 % de gap).
+K_VOISINS = 30
+SEUIL_KNN = 500
+
 # AJOUT interface : réglages remplis par l'interface (voir algorithmes/methodes.py).
 # Avec ces valeurs par défaut, le code fonctionne exactement comme avant.
 depart = 0.0      # heure de départ des camions (360 = 6h00 pour les instances de Lorraine)
 k_max = None      # nombre de camions disponibles (None = illimité)
-proches = None    # AMÉLIORATION : proches[i] = les clients les plus proches de i (None = tous)
 
 
 def trajet(i, j, heure):
@@ -44,7 +54,8 @@ def trajet(i, j, heure):
 # On stocke tout dans des variables globales, comme dans le workshop
 
 
-def charger_instance(coords, demandes, Q_cap, fenetres=None, service=None):
+def charger_instance(coords, demandes, Q_cap, fenetres=None, service=None,
+                     arrondi=None):
     """
     Prépare l'instance.
     coords   : liste de (x, y), indice 0 = dépôt
@@ -52,8 +63,10 @@ def charger_instance(coords, demandes, Q_cap, fenetres=None, service=None):
     Q_cap    : capacité d'un camion
     fenetres : liste de (a_i, b_i)  (None => pas de fenêtres = CVRP)
     service  : liste des temps de service s_i (None => 0 partout)
+    arrondi  : None (distance exacte), "dixieme" (tronquée à 0,1) ou "entier"
+               -> conventions des instances de référence (voir benchmark)
     """
-    global n, q, Q, tw, s, dist
+    global n, q, Q, tw, s, dist, proches
 
     n = len(coords)                      # nombre de sommets (dépôt compris)
     q = list(demandes)
@@ -61,9 +74,28 @@ def charger_instance(coords, demandes, Q_cap, fenetres=None, service=None):
     tw = list(fenetres) if fenetres is not None else [(0, float("inf"))] * n
     s = list(service) if service is not None else [0] * n
 
-    # PRÉ-CALCUL de la matrice des distances (indispensable, cf. livrable 1)
-    # Pour des milliers de clients, numpy est conseillé (voir plus bas).
-    dist = [[math.dist(coords[i], coords[j]) for j in range(n)] for i in range(n)]
+    # PRÉ-CALCUL de la matrice des distances avec numpy (calcul vectorisé :
+    # toutes les distances d'un coup, bien plus rapide qu'une double boucle)
+    c = np.array(coords, dtype=float)
+    d = np.sqrt(((c[:, None, :] - c[None, :, :]) ** 2).sum(axis=2))
+    if arrondi == "dixieme":
+        d = np.floor(d * 10) / 10
+    elif arrondi == "entier":
+        d = np.rint(d)
+    # on repasse en listes Python : lire dist[i][j] case par case est plus
+    # rapide sur une liste que sur un tableau numpy
+    dist = d.tolist()
+
+    # Les K plus proches voisins de chaque client (le dépôt 0 est exclu)
+    petite = n - 1 <= SEUIL_KNN
+    k = n - 2 if (K_VOISINS is None or petite) else min(K_VOISINS, n - 2)
+    d_clients = d.copy()
+    d_clients[:, 0] = np.inf                 # on ne veut pas le dépôt
+    np.fill_diagonal(d_clients, np.inf)      # ni le client lui-même
+    if k > 0:
+        proches = np.argsort(d_clients, axis=1)[:, :k].tolist()
+    else:
+        proches = [[] for _ in range(n)]
 
 
 # =============================================================================
@@ -132,15 +164,23 @@ def grasp_construction(alpha=0.3):
 
     while non_visites:
         tournee = []
+        charge, heure = 0, depart   # charge du camion et heure d'arrivée chez le dernier
         while True:
             dernier = tournee[-1] if tournee else 0
 
-            # 1. candidats réalisables
-            # AMÉLIORATION : on regarde d'abord les clients proches du dernier (bien plus rapide)
-            voisins = [j for j in proches[dernier] if j in non_visites] if proches else []
-            candidats = [j for j in voisins if tournee_valide(tournee + [j])]
-            if not candidats:   # aucun proche possible : on regarde tous les clients
-                candidats = [j for j in non_visites if tournee_valide(tournee + [j])]
+            # 1. candidats réalisables, testés en O(1) chacun : on ne re-simule
+            #    PAS toute la tournée, on part de (charge, heure) du dernier client
+            candidats = []
+            for j in non_visites:
+                if charge + q[j] > Q:
+                    continue                                   # capacité
+                fin = heure + s[dernier]                       # départ de chez le dernier
+                arrivee = max(fin + trajet(dernier, j, fin), tw[j][0])
+                if arrivee > tw[j][1]:
+                    continue                                   # trop tard chez j
+                if arrivee + s[j] + trajet(j, 0, arrivee + s[j]) > tw[0][1]:
+                    continue                                   # retour au dépôt
+                candidats.append(j)
             if not candidats:
                 break  # plus rien ne rentre => on ferme la tournée
 
@@ -156,6 +196,9 @@ def grasp_construction(alpha=0.3):
 
             # 4. choix aléatoire dans la RCL
             choisi = random.choice(rcl)
+            fin = heure + s[dernier]
+            heure = max(fin + trajet(dernier, choisi, fin), tw[choisi][0])
+            charge += q[choisi]
             tournee.append(choisi)
             non_visites.remove(choisi)
 
@@ -201,34 +244,34 @@ def voisinage(solution, taille_echantillon=None):
     taille_echantillon : pour les grandes instances, on ne teste qu'un
     échantillon aléatoire de clients (sinon le voisinage est énorme).
     """
-    tous_clients = [(r, p) for r, t in enumerate(solution) for p in range(len(t))]
+    # position de chaque client : position[client] = (tournée, rang)
+    position = {}
+    for r, t in enumerate(solution):
+        for p, cl in enumerate(t):
+            position[cl] = (r, p)
+
+    tous_clients = list(position.values())
     if taille_echantillon and len(tous_clients) > taille_echantillon:
         tous_clients = random.sample(tous_clients, taille_echantillon)
-
-    # AMÉLIORATION : numéro de la tournée de chaque client
-    tournee_de = {cl: r for r, t in enumerate(solution) for cl in t}
 
     for (r1, p1) in tous_clients:
         t1 = solution[r1]
         c = t1[p1]
         a, b = autour(t1, p1)
-        # AMÉLIORATION : on ne tente que les tournées qui passent près de c
-        if proches:
-            a_tester = sorted({tournee_de[v] for v in proches[c] if v in tournee_de})
-        else:
-            a_tester = range(len(solution))
         # gain obtenu en retirant c :  a -> c -> b  devient  a -> b
         delta_retrait = dist[a][b] - dist[a][c] - dist[c][b]
 
         # ----- RELOCATE : on retire c et on le remet entre x et y -----
-        for r2 in [*a_tester, len(solution)]:        # + len(solution) = ouvrir un nouveau camion
-            if r2 == len(solution):
-                # nouveau camion : 0 -> c -> 0 (AJOUT interface : seulement s'il en reste un)
-                if len(t1) > 1 and (k_max is None or len(solution) < k_max):
-                    yield delta_retrait + 2 * dist[0][c], ("relocate", r1, p1, r2, 0)
-                continue
+        # ouvrir un nouveau camion : 0 -> c -> 0 (AJOUT interface : seulement s'il en reste un)
+        if len(t1) > 1 and (k_max is None or len(solution) < k_max):
+            yield delta_retrait + 2 * dist[0][c], ("relocate", r1, p1, len(solution), 0)
+
+        # On n'essaie que les positions JUSTE AVANT ou JUSTE APRÈS un des K plus
+        # proches voisins v de c : insérer c loin de tout n'est jamais intéressant.
+        for v in proches[c]:
+            r2, pv = position[v]
             t2 = solution[r2]
-            for p2 in range(len(t2) + 1):            # insertion AVANT la position p2
+            for p2 in (pv, pv + 1):                  # insertion AVANT la position p2
                 if r1 == r2 and (p2 == p1 or p2 == p1 + 1):
                     continue                         # même position
                 x = t2[p2 - 1] if p2 > 0 else 0
@@ -242,17 +285,16 @@ def voisinage(solution, taille_echantillon=None):
                 delta_insert = dist[x][c] + dist[c][y] - dist[x][y]
                 yield delta_retrait + delta_insert, ("relocate", r1, p1, r2, p2)
 
-        # ----- SWAP : on échange c avec un client d d'une autre tournée -----
-        for r2 in a_tester:
-            if r2 <= r1:
+        # ----- SWAP : on échange c avec un proche voisin d d'une autre tournée -----
+        for d in proches[c]:
+            r2, p2 = position[d]
+            if r2 == r1:
                 continue
             t2 = solution[r2]
-            for p2 in range(len(t2)):
-                d = t2[p2]
-                e, f = autour(t2, p2)
-                delta = (dist[a][d] + dist[d][b] - dist[a][c] - dist[c][b]
-                         + dist[e][c] + dist[c][f] - dist[e][d] - dist[d][f])
-                yield delta, ("swap", r1, p1, r2, p2)
+            e, f = autour(t2, p2)
+            delta = (dist[a][d] + dist[d][b] - dist[a][c] - dist[c][b]
+                     + dist[e][c] + dist[c][f] - dist[e][d] - dist[d][f])
+            yield delta, ("swap", r1, p1, r2, p2)
 
         # ----- 2-OPT : on inverse le morceau t1[p1..p2] DANS la même tournée -----
         #   a -> [c ... e] -> f   devient   a -> [e ... c] -> f
@@ -349,10 +391,10 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
     nb_iter = 0
     iteration = 0                    # AJOUT interface (pour suivi)
     while nb_iter < iter_max:
+        iteration += 1
         # arrêt forcé si le temps total est dépassé (grandes instances)
         if heure_fin and time.time() > heure_fin:
             break
-        iteration += 1
         meilleur_mvt, delta_meilleur = None, float("inf")
 
         for delta, mvt in voisinage(solution_courante, taille_echantillon):

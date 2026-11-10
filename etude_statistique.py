@@ -94,16 +94,16 @@ def experience_convergence(temps_liste=(2, 5, 10, 30)):
 
 
 # =============================================================================
-# 3. TAILLE : de 100 à 1000 clients (CVRP, instances X)
+# 3. TAILLE : de 100 à 3000 clients (CVRP, instances X et Leuven1)
 # =============================================================================
 def experience_taille(temps=60):
     """Comportement quand l'instance grossit (même temps accordé)."""
     lignes = []
-    for nom in ["X-n101-k25", "X-n200-k36", "X-n502-k39", "X-n1001-k43"]:
+    for nom in ["X-n101-k25", "X-n200-k36", "X-n502-k39", "X-n1001-k43", "Leuven1"]:
         random.seed(0)
         b.charger_vrplib(nom)
         t0 = time.time()
-        g.grasp_construction(0.2)               # temps d'UNE construction GRASP
+        g.grasp_construction(0.0)               # temps d'UNE construction GRASP
         t_construction = time.time() - t0
 
         r = b.tester(nom, graine=0, temps_max=temps)

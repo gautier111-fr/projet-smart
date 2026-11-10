@@ -33,7 +33,12 @@ def telecharger(nom):
     Les instances X sont dans CVRP/, les instances Solomon dans VRPTW/Solomon/.
     """
     os.makedirs("instances", exist_ok=True)
-    dossier = "CVRP/" if nom.startswith("X-") else "VRPTW/Solomon/"
+    if nom.startswith("X-"):
+        dossier = "CVRP/"                    # instances X (100 à 1000 clients)
+    elif nom.startswith(("C", "R")):
+        dossier = "VRPTW/Solomon/"           # Solomon : C101, R201, RC105...
+    else:
+        dossier = "CVRP/XXL/"                # très grandes : Leuven1 (3000 clients)...
     for ext in ("vrp", "sol"):
         fichier = f"instances/{nom}.{ext}"
         if not os.path.exists(fichier):
@@ -60,15 +65,11 @@ def charger_vrplib(nom):
     else:
         fenetres, service = None, None   # CVRP simple
 
-    g.charger_instance(coords, demandes, inst["capacity"], fenetres, service)
-
     # Convention des BKS :
     #  - Solomon (VRPTW) : distances tronquées à 1 décimale
     #  - X (CVRP)        : distances arrondies à l'entier
-    for i in range(n):
-        for j in range(n):
-            d = math.dist(coords[i], coords[j])
-            g.dist[i][j] = math.floor(d * 10) / 10 if fenetres else round(d)
+    arrondi = "dixieme" if fenetres else "entier"
+    g.charger_instance(coords, demandes, inst["capacity"], fenetres, service, arrondi)
 
     return bks
 
@@ -76,10 +77,16 @@ def charger_vrplib(nom):
 # -----------------------------------------------------------------------------
 # 2. Lancer une instance et calculer le gap
 # -----------------------------------------------------------------------------
-def tester(nom, graine=0, temps_max=20, alpha=0.1, taille_tabou=10,
+def tester(nom, graine=0, temps_max=20, alpha=None, taille_tabou=10,
            iter_max=30, taille_echantillon=25):
     random.seed(graine)
     bks = charger_vrplib(nom)
+
+    # alpha automatique : 0,1 jusqu'à 500 clients, 0 (glouton) au-delà.
+    # Sur une grande carte, l'écart (max - min) des distances est énorme :
+    # même alpha = 0,1 laisse entrer des clients lointains dans la RCL.
+    if alpha is None:
+        alpha = 0.1 if g.n - 1 <= 500 else 0.0
 
     t0 = time.time()
     sol, cout = g.grasp_tabou(nb_starts=1000, alpha=alpha, taille_tabou=taille_tabou,
