@@ -1,10 +1,10 @@
 """
 graphiques.py - Tous les graphiques de l'interface (bibliothèque Plotly).
 
-    carte_instance, carte_tournees, carte_reelle : les cartes (onglet Tournées)
-    gantt                                        : le planning de chaque camion
-    suivi                                        : les camions animés, en 3D ou en 2D
-    convergence                                  : le meilleur coût au fil du temps (onglet Comparer)
+    carte_tournees, carte_reelle : les tournées sur un plan, ou sur la vraie carte (Lorraine)
+    gantt                        : le planning de chaque camion
+    suivi                        : les camions animés, en 3D ou en 2D
+    convergence                  : le meilleur coût trouvé au fil du temps
 
 Idée clé pour le suivi des camions : pour chaque camion on construit une liste
 de "points clés" (heure, x, y) : départ du dépôt, arrivée chez chaque client,
@@ -24,18 +24,11 @@ GRIS = "#9a9993"
 COULEUR_SOL = "#eef1ea"
 # Grandes villes écrites sur le suivi, pour se repérer (instances de Lorraine)
 VILLES_REPERES = {"Metz", "Nancy", "Thionville", "Forbach", "Toul", "Sarrebourg", "Lunéville", "Longwy"}
-# Couleur fixe par algorithme (une entité garde toujours sa couleur)
-COULEUR_ALGO = {"Recherche tabou": COULEURS[0], "GRASP": COULEURS[1],
-                "PLNE exacte (≤ 15 clients)": COULEURS[6]}
 
 
 def couleur(k):
     """Couleur du camion numéro k (on recommence la palette au-delà de 8)."""
     return COULEURS[(k - 1) % len(COULEURS)]
-
-
-def couleur_algo(nom):
-    return COULEUR_ALGO.get(nom, COULEURS[3])
 
 
 def _mise_en_page(fig, titre, hauteur=550):
@@ -77,7 +70,7 @@ def position(points, t):
 
 
 # ---------------------------------------------------------------------------
-# Carte de l'instance et carte des tournées
+# Cartes des tournées
 # ---------------------------------------------------------------------------
 def _trace_depot(inst):
     x, y = inst["coords"][0]
@@ -100,28 +93,6 @@ def _texte_client(inst, c):
         a, b = inst["fenetres"][c]
         texte += f"<br>Fenêtre : [{a:.0f} ; {b:.0f}]"
     return texte
-
-
-def carte_instance(inst):
-    """Clients colorés selon l'ouverture de leur fenêtre (ou leur demande)."""
-    xy = inst["coords"][1:]
-    if inst["fenetres"] is not None:
-        valeur, titre = inst["fenetres"][1:, 0], "Ouverture<br>fenêtre"
-    else:
-        valeur, titre = inst["demande"][1:], "Demande"
-    fig = go.Figure()
-    fig.add_trace(go.Scattergl(
-        x=xy[:, 0], y=xy[:, 1], mode="markers", name="Clients",
-        marker=dict(size=7 if inst["n"] < 500 else 4, color=valeur, colorscale="Blues",
-                    showscale=True, colorbar=dict(title=titre), line=dict(width=0.5, color=GRIS)),
-        text=[_texte_client(inst, c) for c in range(1, inst["n"] + 1)],
-        hovertemplate="%{text}<extra></extra>"))
-    fig.add_trace(_trace_depot(inst))
-    fig.update_yaxes(scaleanchor="x")
-    _mise_en_page(fig, f"{inst['nom']} : {inst['n']} clients")
-    # La barre de couleur occupe le côté droit : la légende va au-dessus du graphique.
-    fig.update_layout(legend=dict(orientation="h", x=1, xanchor="right", y=1.02, yanchor="bottom"))
-    return fig
 
 
 def carte_tournees(inst, ev, titre=""):
@@ -147,31 +118,24 @@ def carte_tournees(inst, ev, titre=""):
                                        f"distance {ev['distance']:.1f}")
 
 
-def carte_reelle(inst, ev=None):
+def carte_reelle(inst, ev):
     """Vraie carte (OpenStreetMap) pour les instances de Lorraine.
     Les traits relient les villes à vol d'oiseau (pas le tracé exact des routes)."""
     lat, lon = inst["latlon"][:, 0], inst["latlon"][:, 1]
     fig = go.Figure()
-    if ev is None:                                    # juste les clients
+    for t in ev["tournees"]:
+        chemin = [0] + t["clients"] + [0]
         fig.add_trace(go.Scattermap(
-            lat=lat[1:], lon=lon[1:], mode="markers", name="Clients",
-            marker=dict(size=10, color=COULEURS[0]),
-            hovertext=[_texte_client(inst, c) for c in range(1, inst["n"] + 1)],
-            hoverinfo="text"))
-    else:
-        for t in ev["tournees"]:
-            chemin = [0] + t["clients"] + [0]
-            fig.add_trace(go.Scattermap(
-                lat=lat[chemin], lon=lon[chemin], mode="lines+markers",
-                name=f"Camion {t['numero']} ({t['charge']:.0f}/{inst['capacite']:.0f})",
-                line=dict(width=3, color=couleur(t["numero"])), marker=dict(size=9),
-                hovertext=[nom_lieu(inst, i) for i in chemin], hoverinfo="text"))
+            lat=lat[chemin], lon=lon[chemin], mode="lines+markers",
+            name=f"Camion {t['numero']} ({t['charge']:.0f}/{inst['capacite']:.0f})",
+            line=dict(width=3, color=couleur(t["numero"])), marker=dict(size=9),
+            hovertext=[nom_lieu(inst, i) for i in chemin], hoverinfo="text"))
     fig.add_trace(go.Scattermap(lat=[lat[0]], lon=[lon[0]], mode="markers", name="Entrepôt",
                                 hovertext=[f"Entrepôt {inst['villes'][0]}"], hoverinfo="text",
                                 marker=dict(size=18, color=COULEUR_DEPOT)))
     fig.update_layout(map=dict(style="open-street-map", zoom=8.2,
                                center=dict(lat=lat.mean(), lon=lon.mean())))
-    return _mise_en_page(fig, "Carte de la tournée" if ev else "Clients à livrer", hauteur=650)
+    return _mise_en_page(fig, "Carte de la tournée", hauteur=650)
 
 
 # ---------------------------------------------------------------------------
@@ -341,17 +305,12 @@ def _ajouter_lecture(fig, etiquettes, redessiner):
 # ---------------------------------------------------------------------------
 # Courbe de convergence (si l'algorithme appelle suivi(iteration, cout))
 # ---------------------------------------------------------------------------
-def convergence(historiques, bks=None):
-    """historiques : {nom_algo: [(temps, iteration, meilleur_cout), ...]}"""
-    fig = go.Figure()
-    for nom, h in historiques.items():
-        if h:
-            fig.add_trace(go.Scatter(x=[p[0] for p in h], y=[p[2] for p in h], name=nom,
-                                     mode="lines+markers",       # un point = une amélioration
-                                     line=dict(shape="hv", width=2, color=couleur_algo(nom))))
+def convergence(historique, bks=None):
+    """historique : liste de (temps, iteration, meilleur_cout), un point par amélioration."""
+    fig = go.Figure(go.Scatter(x=[p[0] for p in historique], y=[p[2] for p in historique],
+                               mode="lines+markers", line=dict(shape="hv", width=2, color=COULEURS[0])))
     if bks:
         fig.add_hline(y=bks, line_dash="dash", line_color=GRIS,
                       annotation_text="Meilleure solution connue")
-    fig.update_layout(xaxis_title="Temps de calcul (s)", yaxis_title="Meilleur coût trouvé",
-                      hovermode="x unified")
+    fig.update_layout(xaxis_title="Temps de calcul (s)", yaxis_title="Meilleur coût trouvé")
     return _mise_en_page(fig, "Convergence", hauteur=400)

@@ -7,12 +7,11 @@ une ligne par essai dans un CSV, au même format que le benchmark de l'équipe :
 plus temps_meilleure_s : le moment où la meilleure solution a été trouvée.
 
 Ce que demande le sujet, et la fonction qui y répond :
-    qualité des solutions (gap VRPLIB)              -> resume_par_methode, graphique_gap
-    robustesse (stabilité d'une graine à l'autre)   -> resume_par_methode
+    qualité des solutions (gap VRPLIB)              -> resume_qualite, graphique_gap
+    robustesse (stabilité d'une graine à l'autre)   -> resume_qualite
     comportement selon le type d'instance           -> resume_par_famille
     temps de calcul selon la taille                 -> graphique_temps, pente_complexite
     sensibilité aux paramètres                      -> graphique_sensibilite
-    analyse statistique (tabou contre GRASP)        -> test_wilcoxon
 """
 
 import os
@@ -22,10 +21,9 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from scipy import stats
 
 from algorithmes.methodes import lancer
-from interface.graphiques import COULEUR_ALGO, COULEURS
+from interface.graphiques import COULEURS
 from probleme.contraintes import evaluer, gap
 from probleme.instances import charger_instance
 
@@ -88,8 +86,8 @@ def sauvegarder(df):
 # ---------------------------------------------------------------------------
 # Tableaux
 # ---------------------------------------------------------------------------
-def resume_par_methode(df):
-    """Qualité et robustesse de chaque méthode, en un tableau."""
+def resume_qualite(df):
+    """Qualité et robustesse, une ligne par réglage testé."""
     lignes = []
     for algo, g in df.groupby("algorithme", sort=False):
         valides = g[g["valide"] == True]
@@ -98,7 +96,7 @@ def resume_par_methode(df):
         variation = valides.groupby("instance")["cout"].agg(
             lambda x: 100 * x.std(ddof=1) / x.mean() if len(x) > 1 else 0)
         lignes.append({
-            "méthode": algo,
+            "réglage": algo,
             "gap moyen (%)": gaps.mean(),
             "gap max (%)": gaps.max(),
             f"instances ≤ {SEUIL_GAP} %": f"{(gaps <= SEUIL_GAP).sum()} / {len(gaps)}",
@@ -119,27 +117,8 @@ def resume_par_famille(df):
 
 
 # ---------------------------------------------------------------------------
-# Statistiques
+# Temps de calcul selon la taille
 # ---------------------------------------------------------------------------
-def test_wilcoxon(df, algo_a, algo_b):
-    """Test de Wilcoxon apparié : A et B donnent-ils des gaps différents ?
-    On compare, instance par instance, le gap moyen (sur les graines) de A et de B.
-    p < 0,05 -> la différence n'est pas due au hasard."""
-    moyennes = df[df["valide"] == True].pivot_table(index="instance", columns="algorithme",
-                                                     values="gap_%", aggfunc="mean")
-    paires = moyennes[[algo_a, algo_b]].dropna()
-    if len(paires) < 6:
-        return f"Pas assez d'instances avec référence en commun ({len(paires)}, il en faut 6)."
-    diff = paires[algo_a] - paires[algo_b]
-    if np.allclose(diff, 0):
-        return f"Sur {len(paires)} instances : les deux méthodes donnent les mêmes coûts."
-    p = stats.wilcoxon(paires[algo_a], paires[algo_b]).pvalue
-    meilleur = algo_a if diff.mean() < 0 else algo_b
-    if p < 0.05:
-        return f"Sur {len(paires)} instances : {meilleur} est significativement meilleur (p = {p:.4f})."
-    return f"Sur {len(paires)} instances : pas de différence significative (p = {p:.3f})."
-
-
 def pente_complexite(df):
     """Ajuste temps = a x n^b (une droite en échelle log-log) pour chaque méthode,
     avec le temps mis pour trouver la meilleure solution. b ~ 1 : linéaire, b ~ 2 : quadratique."""
@@ -156,7 +135,7 @@ def pente_complexite(df):
 # ---------------------------------------------------------------------------
 def _couleurs(df):
     algos = list(dict.fromkeys(df["algorithme"]))
-    return {a: COULEUR_ALGO.get(a, COULEURS[i % len(COULEURS)]) for i, a in enumerate(algos)}
+    return {a: COULEURS[i % len(COULEURS)] for i, a in enumerate(algos)}
 
 
 def graphique_gap(df):
