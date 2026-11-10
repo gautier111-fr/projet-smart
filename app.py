@@ -69,10 +69,10 @@ suivi = px.scatter(pd.DataFrame(lignes), x="x", y="y", color="camion", animation
                    range_x=[xy[:, 0].min() - marge, xy[:, 0].max() + marge],
                    range_y=[xy[:, 1].min() - marge, xy[:, 1].max() + marge], height=650)
 suivi.update_traces(marker_size=12)
-for i, t in enumerate(ev["tournees"]):                  # les tournées prévues, en trait fin
+for i, t in enumerate(ev["tournees"]):                  # les tournées : trait fin + un point par livraison
     chemin = [0] + t["clients"] + [0]
-    suivi.add_scatter(x=xy[chemin, 0], y=xy[chemin, 1], mode="lines", showlegend=False,
-                      line=dict(width=1, color=couleurs[i % len(couleurs)]))
+    suivi.add_scatter(x=xy[chemin, 0], y=xy[chemin, 1], mode="lines+markers", showlegend=False,
+                      line=dict(width=1, color=couleurs[i % len(couleurs)]), marker_size=5)
 suivi.add_scatter(x=xy[:1, 0], y=xy[:1, 1], mode="markers", name="Dépôt",
                   marker=dict(symbol="square", size=15, color="black"))
 suivi.update_yaxes(scaleanchor="x")                     # même échelle en x et en y
