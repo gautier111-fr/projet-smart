@@ -10,7 +10,9 @@ L'interface (`app.py`) n'est qu'un affichage : elle appelle les fonctions décri
 partie 12 répond aux questions sur le code lui-même, et la partie 13 liste **toutes** les
 fonctions du projet.
 
-### Le code en chiffres : 1 473 lignes de Python (commentaires compris)
+### Le code en chiffres : 878 lignes de code (1 473 avec commentaires et lignes vides)
+
+Sans les commentaires, les docstrings et les lignes vides, il reste **878 lignes de code** (dont 253 pour GRASP + Tabou et 44 pour la PLNE). Le tableau donne les lignes totales.
 
 | Fichier | Lignes | Rôle |
 |---|---|---|
