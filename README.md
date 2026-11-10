@@ -1,4 +1,6 @@
-# Projet Smart : tournées de livraison (ADEME / CesiCDP) - Groupe 3
+# Projet Smart : tournées de livraison (ADEME / CesiCDP) - Groupe 4
+
+Yanis BOUNCEUR · Gautier DREYER · Ange MAGATSING NGASSEU · Vladimir MAJCHER
 
 Une entreprise doit livrer des clients avec plusieurs camions identiques partant d'un même
 dépôt. Il faut construire les tournées qui **minimisent la distance totale** en respectant :
