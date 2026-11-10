@@ -1,7 +1,7 @@
 """
 etude.py - L'onglet « Étude expérimentale » de l'interface.
 
-On lance chaque méthode sur chaque instance, plusieurs fois (graines), et on enregistre
+On lance GRASP + Tabou sur chaque instance, plusieurs fois (graines), et on enregistre
 une ligne par essai dans un CSV, au même format que le benchmark de l'équipe :
     instance, famille, n, algorithme, graine, cout, bks, gap_%, camions, temps_s, valide
 plus temps_meilleure_s : le moment où la meilleure solution a été trouvée.
@@ -22,7 +22,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from algorithmes.methodes import lancer
+from algorithmes.methodes import GRASP_TABOU, lancer
 from interface.graphiques import COULEURS
 from probleme.contraintes import evaluer, gap
 from probleme.instances import charger_instance
@@ -35,27 +35,25 @@ SEUIL_GAP = 7          # au-delà de 7-10 % de gap, la note est limitée à B (s
 # ---------------------------------------------------------------------------
 # Lancer les essais et enregistrer le CSV
 # ---------------------------------------------------------------------------
-def executer(chemins, configurations, graines, temps_max, progression=None):
-    """Lance chaque configuration sur chaque instance avec chaque graine.
+def executer(chemins, reglages, graines, temps_max, progression=None):
+    """Lance GRASP + Tabou sur chaque instance, avec chaque réglage et chaque graine.
 
-    configurations : liste de (nom affiché, algorithme, paramètres), par exemple
-                     [("GRASP", "GRASP", {}), ("GRASP alpha=0.1", "GRASP", {"alpha": 0.1})]
-    progression    : fonction(fraction, message) pour la barre de progression.
+    reglages    : {nom affiché: paramètres}, ex. {"alpha=0.05": {"alpha": 0.05}, "alpha=0.3": {...}}
+    progression : fonction(fraction, message) pour la barre de progression.
     Renvoie un tableau pandas : une ligne par essai.
     """
     lignes = []
-    total, fait = len(chemins) * len(configurations) * len(graines), 0
+    total, fait = len(chemins) * len(reglages) * len(graines), 0
     for chemin in chemins:
         inst = charger_instance(chemin)
-        for etiquette, algo, parametres in configurations:
+        for etiquette, parametres in reglages.items():
             for graine in graines:
                 if progression:
                     progression(fait / total, f"{inst['nom']} - {etiquette} - graine {graine}")
                 ligne = {"instance": inst["nom"], "famille": inst["famille"], "n": inst["n"],
                          "algorithme": etiquette, "graine": graine}
                 try:
-                    routes, temps, historique = lancer(algo, inst, temps_max, graine,
-                                                                parametres)
+                    routes, temps, historique = lancer(GRASP_TABOU, inst, temps_max, graine, parametres)
                     ev = evaluer(inst, routes)
                     ecart = gap(ev["distance"], inst["bks"])
                     # Les méthodes utilisent tout le temps donné : ce qui mesure leur rapidité,
@@ -133,18 +131,13 @@ def pente_complexite(df):
 # ---------------------------------------------------------------------------
 # Graphiques
 # ---------------------------------------------------------------------------
-def _couleurs(df):
-    algos = list(dict.fromkeys(df["algorithme"]))
-    return {a: COULEURS[i % len(COULEURS)] for i, a in enumerate(algos)}
-
-
 def graphique_gap(df):
     """Gap par instance (moyenne sur les graines, barre = écart-type)."""
     g = df[(df["valide"] == True) & df["gap_%"].notna()] \
         .groupby(["instance", "n", "algorithme"])["gap_%"].agg(["mean", "std"]) \
         .reset_index().sort_values("n")
     fig = px.bar(g, x="instance", y="mean", error_y="std", color="algorithme",
-                 barmode="group", color_discrete_map=_couleurs(df),
+                 barmode="group", color_discrete_sequence=COULEURS,
                  labels={"mean": "Gap moyen (%)", "instance": "", "algorithme": ""})
     fig.add_hline(y=SEUIL_GAP, line_dash="dash", line_color="#e34948")
     fig.update_layout(template="plotly_white", height=450,
@@ -156,7 +149,7 @@ def graphique_gap(df):
 def graphique_temps(df):
     g = df.groupby(["n", "algorithme"])["temps_meilleure_s"].mean().reset_index()
     fig = px.scatter(g, x="n", y="temps_meilleure_s", color="algorithme", log_x=True,
-                     log_y=True, color_discrete_map=_couleurs(df),
+                     log_y=True, color_discrete_sequence=COULEURS,
                      labels={"n": "Nombre de clients", "temps_meilleure_s": "Temps (s)",
                              "algorithme": ""})
     fig.update_traces(mode="lines+markers", marker=dict(size=9))

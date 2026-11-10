@@ -72,14 +72,6 @@ def position(points, t):
 # ---------------------------------------------------------------------------
 # Cartes des tournées
 # ---------------------------------------------------------------------------
-def _trace_depot(inst):
-    x, y = inst["coords"][0]
-    return go.Scatter(x=[x], y=[y], mode="markers", name="Dépôt",
-                      marker=dict(symbol="square", size=16, color=COULEUR_DEPOT,
-                                  line=dict(color="white", width=2)),
-                      hovertemplate="Dépôt<extra></extra>")
-
-
 def nom_lieu(inst, i):
     """Nom de la ville (instances de Lorraine) ou numéro du client."""
     if "villes" in inst:
@@ -95,8 +87,8 @@ def _texte_client(inst, c):
     return texte
 
 
-def carte_tournees(inst, ev, titre=""):
-    """Une couleur par camion, flèche implicite par l'ordre de la ligne."""
+def carte_tournees(inst, ev):
+    """Une couleur par camion ; au survol, le détail de chaque arrêt."""
     xy = inst["coords"]
     fig = go.Figure()
     for t in ev["tournees"]:
@@ -111,11 +103,11 @@ def carte_tournees(inst, ev, titre=""):
             line=dict(color=couleur(t["numero"]), width=2),
             marker=dict(size=7 if inst["n"] < 300 else 3),
             text=textes, hovertemplate=f"Camion {t['numero']}<br>%{{text}}<extra></extra>"))
-    fig.add_trace(_trace_depot(inst))
+    fig.add_trace(go.Scatter(x=xy[:1, 0], y=xy[:1, 1], mode="markers", name="Dépôt",
+                             marker=dict(symbol="square", size=16, color=COULEUR_DEPOT)))
     fig.update_yaxes(scaleanchor="x")
     fig.update_layout(showlegend=len(ev["tournees"]) <= 30)
-    return _mise_en_page(fig, titre or f"Tournées : {ev['nb_vehicules']} camions, "
-                                       f"distance {ev['distance']:.1f}")
+    return _mise_en_page(fig, f"Tournées : {ev['nb_vehicules']} camions, distance {ev['distance']:.1f}")
 
 
 def carte_reelle(inst, ev):
@@ -220,31 +212,23 @@ def suivi(inst, ev, vue="3D", nb_images=60, max_camions=30):
                         marker=dict(color=COULEUR_DEPOT, size=6 if en_3d else 14),
                         hovertemplate="Entrepôt<extra></extra>"))
 
-    # 3) Ce qui bouge : le trajet déjà parcouru et le camion (2 tracés par camion)
-    numeros = [t["numero"] for t in tournees]
-
+    # 3) Ce qui bouge : pour chaque camion, le trajet déjà parcouru (trait épais) et le camion
     def image(heure):
-        """Les tracés animés à une heure donnée (position seulement)."""
+        """Les tracés animés à une heure donnée."""
         traces = []
         for t, p in zip(tournees, trajets):
+            k = t["numero"]
             passes = p[p[:, 0] <= heure]               # les points déjà atteints
             x, y, z = position(p, heure)               # la position actuelle
-            traces += [trace([*passes[:, 1], x], [*passes[:, 2], y], [*passes[:, 3], z]),
-                       trace([x], [y], [z])]
+            commun = dict(legendgroup=str(k), showlegend=False, hoverinfo="skip")
+            traces += [trace([*passes[:, 1], x], [*passes[:, 2], y], [*passes[:, 3], z], mode="lines",
+                             line=dict(color=couleur(k), width=7 if en_3d else 4), **commun),
+                       trace([x], [y], [z], mode="markers+text", text=[str(k)], textposition="top center",
+                             marker=dict(color=couleur(k), size=7 if en_3d else 12), **commun)]
         return traces
 
     premier = len(fig.data)
-    for numero_trace, depart in enumerate(image(debut)):
-        k = numeros[numero_trace // 2]
-        if numero_trace % 2 == 0:                      # trajet parcouru : trait épais
-            depart.update(mode="lines", line=dict(color=couleur(k), width=7 if en_3d else 4),
-                          hoverinfo="skip")
-        else:                                          # le camion : point + numéro
-            depart.update(mode="markers+text", marker=dict(color=couleur(k), size=7 if en_3d else 12),
-                          text=[str(k)], textposition="top center", hoverinfo="skip")
-        depart.update(legendgroup=str(k), showlegend=False)
-        fig.add_trace(depart)
-
+    fig.add_traces(image(debut))
     heures = np.linspace(debut, fin, nb_images)
     animes = list(range(premier, len(fig.data)))
     fig.frames = [go.Frame(data=image(h), traces=animes, name=str(i))

@@ -138,12 +138,12 @@ with onglets[2]:                                        # ---------- Étude exp�
         nom_param = st.selectbox("Paramètre", PARAMETRES)
         valeurs = st.text_input("Valeurs à tester, séparées par des virgules", placeholder="0.05, 0.1, 0.3")
 
-    # Un réglage = (nom affiché, méthode, paramètres). Sans sensibilité : le réglage par défaut.
-    reglages, valeur_de = [(GRASP_TABOU, GRASP_TABOU, {})], {}
+    # Un réglage = nom affiché -> paramètres. Sans sensibilité : le réglage par défaut.
+    reglages, valeur_de = {GRASP_TABOU: {}}, {}
     if valeurs:
         try:
             valeur_de = {f"{nom_param}={v}": v for v in (json.loads(x) for x in valeurs.split(","))}
-            reglages = [(e, GRASP_TABOU, {nom_param: v}) for e, v in valeur_de.items()]
+            reglages = {e: {nom_param: v} for e, v in valeur_de.items()}
         except json.JSONDecodeError:
             st.error("Valeurs invalides : écrivez des nombres séparés par des virgules.")
 
