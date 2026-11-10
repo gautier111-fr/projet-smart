@@ -92,14 +92,12 @@ def evaluer(inst, routes):
             distance += d[precedent, c]
             ouverture, fermeture = (fen[c] if fen is not None else (0.0, INFINI))
             debut = max(arrivee, ouverture)            # attente autorisée si on est en avance
-            ok = debut <= fermeture + 1e-6             # interdit de livrer après la fermeture
-            if not ok:
+            if debut > fermeture + 1e-6:               # interdit de livrer après la fermeture
                 violations.append(f"Camion {k} : client {c} livré à {debut:.1f}, "
                                   f"fenêtre fermée à {fermeture:.0f}")
             fin = debut + s[c]
             arrets.append({"client": c, "arrivee": arrivee, "debut": debut,
-                           "attente": debut - arrivee, "fin": fin,
-                           "ouverture": ouverture, "fermeture": fermeture, "ok": ok})
+                           "attente": debut - arrivee, "fin": fin})
             t, precedent = fin, c
         retour = t + temps_trajet(inst, precedent, 0, t)
         distance += d[precedent, 0]
@@ -110,13 +108,10 @@ def evaluer(inst, routes):
             violations.append(f"Camion {k} : retour au dépôt à {retour:.1f} après sa fermeture")
         tournees.append({"numero": k, "clients": list(route), "charge": charge,
                          "distance": distance, "depart": depart, "retour": retour,
-                         "duree": retour - depart,
-                         "attente": sum(a["attente"] for a in arrets), "arrets": arrets})
+                         "arrets": arrets})
 
     return {
         "distance": sum(t["distance"] for t in tournees),   # coût VRPLIB (pour le gap)
-        "duree": sum(t["duree"] for t in tournees),         # durée totale (avec trafic)
-        "attente": sum(t["attente"] for t in tournees),
         "nb_vehicules": len(tournees),
         "realisable": not violations,
         "violations": violations,

@@ -48,8 +48,7 @@ def matrice_distances(coords, arrondi):
 # ---------------------------------------------------------------------------
 
 def construire_instance(nom, coords, demande, capacite, fenetres=None, service=None,
-                        nb_vehicules=None, arrondi="entier", famille="",
-                        bks=None, bks_routes=None):
+                        nb_vehicules=None, arrondi="entier", famille="", bks=None):
     """Range toutes les données dans un dictionnaire unique (format du projet).
 
     Le sommet 0 est TOUJOURS le dépôt, les clients sont numérotés 1..n.
@@ -78,11 +77,9 @@ def construire_instance(nom, coords, demande, capacite, fenetres=None, service=N
         "fenetres": fenetres,                           # (n+1, 2) [a_i, b_i] ou None
         "service": service,                             # (n+1,) temps de service s_i
         "distance": distance,                           # (n+1, n+1) c_ij
-        "arrondi": arrondi,
         "horizon": float(horizon),
         "trafic": None,                                 # profil de trafic (ou None)
         "bks": bks,                                     # coût de la meilleure solution connue
-        "bks_routes": bks_routes,
     }
 
 
@@ -129,11 +126,8 @@ def charger_instance(chemin):
         service = np.full(len(brut["node_coord"]), float(service))
     nom = str(brut.get("name", os.path.basename(chemin))).strip()
 
-    bks, bks_routes = None, None
     chemin_sol = os.path.splitext(chemin)[0] + ".sol"
-    if os.path.exists(chemin_sol):
-        sol = vrplib.read_solution(chemin_sol)
-        bks, bks_routes = float(sol["cost"]), sol["routes"]
+    bks = float(vrplib.read_solution(chemin_sol)["cost"]) if os.path.exists(chemin_sol) else None
 
     return construire_instance(
         nom=nom,
@@ -146,7 +140,6 @@ def charger_instance(chemin):
         arrondi="troncature" if fenetres is not None else "entier",
         famille=famille_instance(nom),
         bks=bks,
-        bks_routes=bks_routes,
     )
 
 
@@ -164,15 +157,9 @@ def lister_instances():
                 if ":" in ligne:
                     cle, valeur = ligne.split(":", 1)
                     entete[cle.strip()] = valeur.strip()
-        nom = entete.get("NAME", os.path.basename(chemin)[:-4])
-        liste.append({
-            "nom": nom,
-            "famille": famille_instance(nom),
-            "type": "CVRPTW" if "TW" in entete.get("TYPE", "") else "CVRP",
-            "n": int(entete["DIMENSION"]) - 1,
-            "bks connue": os.path.exists(chemin[:-4] + ".sol"),
-            "chemin": chemin,
-        })
+        liste.append({"nom": entete.get("NAME", os.path.basename(chemin)[:-4]),
+                      "type": "CVRPTW" if "TW" in entete.get("TYPE", "") else "CVRP",
+                      "n": int(entete["DIMENSION"]) - 1, "chemin": chemin})
     from probleme.lorraine import lister_instances_lorraine
     liste += lister_instances_lorraine()                # villes de Metz / Nancy
     return sorted(liste, key=lambda i: (i["type"], i["n"], i["nom"]))

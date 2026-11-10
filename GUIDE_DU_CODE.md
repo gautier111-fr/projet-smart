@@ -103,7 +103,7 @@ plus petite a été calculé par la PLNE et enregistré dans son `.sol`.
    ```
 
    Il contrôle aussi que chaque client est livré **une seule fois**, la **capacité** de
-   chaque camion et le **nombre de camions**. Il renvoie la distance, la durée, l'attente,
+   chaque camion et le **nombre de camions**. Il renvoie la distance, le nombre de camions,
    `realisable` (vrai / faux), la liste des violations en clair et le détail de chaque arrêt
    (utilisé par le planning et le suivi).
 3. **Gap** : `gap(cout, reference)` = 100 × (coût − référence) / référence, la formule du sujet.

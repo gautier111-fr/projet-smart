@@ -161,7 +161,6 @@ def creer_instance_lorraine(nom):
 
 def lister_instances_lorraine():
     """Même format que instances.lister_instances()."""
-    return [{"nom": nom, "famille": "Lorraine (villes réelles)",
-             "type": "CVRPTW" if s["creneaux"] else "CVRP", "n": len(s["clients"]),
-             "bks connue": OPTIMUM_CONNU.get(nom) is not None, "chemin": "lorraine:" + nom}
+    return [{"nom": nom, "type": "CVRPTW" if s["creneaux"] else "CVRP",
+             "n": len(s["clients"]), "chemin": "lorraine:" + nom}
             for nom, s in SCENARIOS.items()]
