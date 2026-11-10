@@ -10,18 +10,19 @@ dépôt. Il faut construire les tournées qui **minimisent la distance totale** 
 
 C'est le problème **CVRPTW** (niveau A du sujet), qui contient le CVRP (niveau B).
 Il est NP-difficile : on utilise une **méthode exacte (PLNE)** pour les petites instances
-et des **métaheuristiques (GRASP et recherche tabou)** pour les grandes.
+et une **métaheuristique, GRASP + recherche tabou**, pour les grandes : le GRASP construit
+des solutions, la recherche tabou les améliore, et on recommence tant qu'il reste du temps.
 
 ## Ce que contient le dépôt
 
 | Quoi | Où |
 |---|---|
 | Le livrable : modélisation, PLNE, complexité, métaheuristique, benchmark, étude statistique | `Projet_Smart.ipynb` |
-| Le GRASP et la recherche tabou | `algorithmes/grasp_tabou_cvrptw.py` |
+| La métaheuristique GRASP + Tabou | `algorithmes/grasp_tabou_cvrptw.py` |
 | La PLNE du livrable 1, résolue par CBC | `algorithmes/plne.py` |
 | Le benchmark sur les instances de référence VRPLIB (gap) | `benchmark_vrplib.py` |
 | L'étude statistique (robustesse, convergence, taille, sensibilité) | `etude_statistique.py` |
-| Une interface web pour lancer, vérifier, visualiser et comparer les méthodes | `app.py` |
+| Une interface web pour lancer, vérifier et visualiser les tournées, et faire l'étude expérimentale | `app.py` |
 | L'explication de chaque partie du code | **[`GUIDE_DU_CODE.md`](GUIDE_DU_CODE.md)** |
 
 ## Installation
@@ -39,8 +40,7 @@ Python 3.10 ou plus. `pulp` est fixé à la version 2.9.0 (la version 4 change l
 | ouvrir l'interface | `streamlit run app.py` (ou double-clic sur `lancer_interface.bat`) |
 | le benchmark VRPLIB (20 instances, 20 s chacune) | `python benchmark_vrplib.py 20` |
 | l'étude statistique (environ 25 min) | `python etude_statistique.py` (ou `python etude_statistique.py 1 3` pour certaines expériences) |
-| tester le GRASP + tabou seul | `python algorithmes/grasp_tabou_cvrptw.py` |
-| recréer les instances générées (déjà fait) | `python -m probleme.instances` |
+| tester le GRASP + Tabou seul | `python algorithmes/grasp_tabou_cvrptw.py` |
 
 Toutes les commandes se lancent **depuis le dossier du projet**. Les résultats (CSV et
 graphiques) sont enregistrés dans `resultats/`.
@@ -52,42 +52,42 @@ projet-smart/
 ├── README.md                 ce fichier
 ├── GUIDE_DU_CODE.md          l'explication de chaque fichier et de chaque partie du code
 ├── Projet_Smart.ipynb        le notebook du livrable
-├── app.py                    ▶ l'interface (4 onglets)
+├── app.py                    ▶ l'interface (3 onglets)
 ├── benchmark_vrplib.py       ▶ le benchmark VRPLIB
 ├── etude_statistique.py      ▶ l'étude statistique
 ├── requirements.txt          les bibliothèques à installer
 ├── lancer_interface.bat      lance l'interface d'un double-clic (Windows)
 │
 ├── probleme/                 les données et les règles du problème
-│   ├── instances.py          lire, créer et lister les instances ; matrice des distances
+│   ├── instances.py          lire et lister les instances ; matrice des distances
 │   ├── lorraine.py           5 instances sur de vraies villes autour de Metz et Nancy
 │   └── contraintes.py        vérifier une solution, trafic, gap
 ├── algorithmes/              les méthodes de résolution
-│   ├── grasp_tabou_cvrptw.py GRASP + recherche tabou
+│   ├── grasp_tabou_cvrptw.py GRASP + Tabou (le code de l'équipe)
 │   ├── plne.py               PLNE (méthode exacte)
-│   └── methodes.py           les 3 méthodes de l'interface et leur lancement chronométré
+│   └── methodes.py           les 2 méthodes de l'interface et leur lancement chronométré
 ├── interface/                ce qui ne sert qu'à l'interface
 │   ├── graphiques.py         cartes, planning, suivi 3D / 2D, convergence
 │   └── etude.py              l'onglet « Étude expérimentale »
 │
 ├── instances/                les instances (.vrp) et leurs meilleures solutions connues (.sol)
-└── resultats/                les CSV et graphiques produits
+├── resultats/                les CSV et graphiques produits
+└── images/                   les captures de l'interface (notebook, partie 10)
 ```
 
 Règle de rangement : **à la racine, ce qu'on lance ; dans les dossiers, le code rangé par thème.**
 
 ## Résultats en bref
 
-* **Benchmark VRPLIB du notebook** (20 instances Solomon et X, 20 s, une graine) :
-  gap moyen **3,34 %** avec alpha = 0,1 (4,98 % avec alpha = 0,2), **19 instances sur 20
-  sous 7 %**, toutes les solutions valides.
-* **Amélioration « 40 voisins les plus proches »** (12 instances de 100 à 3 000 clients,
-  10 s, alpha = 0,2) : gap moyen de la recherche tabou **7,6 % → 5,7 %**, du GRASP
-  **43,7 % → 6,8 %**. Elle sert surtout aux grandes instances.
-* **Points faibles** : fenêtres larges (R205 reste à 8,7 %) et très grandes instances avec
-  fenêtres serrées (R1_10_1, 1 000 clients : environ 19 %).
-
-Le détail et l'analyse sont dans le notebook.
+* **Benchmark VRPLIB** (20 instances Solomon et X, 20 s, une graine) : gap moyen **3,50 %**,
+  **19 instances sur 20 sous 7 %**, toutes les solutions valides (notebook, partie 7).
+* **Réglage alpha = 0,1** : gap moyen 4,98 % → 3,34 %, amélioration significative
+  (test de Wilcoxon, p = 0,022).
+* **Passage à l'échelle** (numpy, construction incrémentale, 30 plus proches voisins) :
+  X-n1001-k43 (1 000 clients, 60 s) passe de 37 % à **7,8 %**, Leuven1 (3 000 clients) **6,8 %**.
+* **PLNE** : optimum prouvé jusqu'à 10 clients, retrouvé par GRASP + Tabou ; à 15 clients, la
+  PLNE ne prouve plus l'optimum en 60 s, GRASP + Tabou fait presque aussi bien en 5 s.
+* **Point faible** : les fenêtres larges (RC205 reste à 7,95 %).
 
 ## Références
 

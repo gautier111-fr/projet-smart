@@ -11,7 +11,7 @@ Le trajet d'une résolution, quel que soit le point de départ (interface, bench
 
 ```
  instance         ──►  méthode de résolution  ──►  tournées          ──►  vérification
- (les données)         (GRASP, tabou, PLNE)        [[3, 7, 1], [5, 2]]     (contraintes, coût, gap)
+ (les données)         (GRASP + Tabou, ou PLNE)    [[3, 7, 1], [5, 2]]     (contraintes, coût, gap)
 ```
 
 * Une **tournée** est la liste des clients d'un camion, sans le dépôt : `[3, 7, 1]` veut
@@ -64,11 +64,11 @@ Les fonctions, partie par partie :
 3. **Lire** : `charger_instance(chemin)` lit un fichier `.vrp` avec `vrplib`, et son `.sol`
    s'il existe (la meilleure solution connue). `lister_instances()` donne les 20 instances
    de l'interface : les sous-dossiers `instances/CVRP`, `VRPTW`, `GENERE` et les 5 de Lorraine.
-4. **Instances créées par nous** : `exemple_livrable1()` (6 clients, optimum 33,9) et
-   `generer_instance(n, repartition, depot, fenetres)` (clients uniformes, en grappes ou
-   mixtes ; dépôt au centre ou dans un coin ; fenêtres aucune, larges ou serrées).
-5. **Création de `instances/GENERE`** (déjà faite) : `python -m probleme.instances` recrée les
-   3 instances générées. Pour la petite, la PLNE calcule l'optimum, enregistré dans le `.sol`.
+4. **L'exemple du livrable 1** : `exemple_livrable1()` (6 clients, optimum 33,9).
+
+Les 3 instances de `instances/GENERE` ont été générées une fois (clients uniformes ou en
+grappes, dépôt au centre ou dans un coin, fenêtres serrées ou aucune) ; l'optimum de la
+plus petite a été calculé par la PLNE et enregistré dans son `.sol`.
 
 ### `lorraine.py` : 5 instances sur de vraies villes
 
@@ -112,32 +112,32 @@ Les fonctions, partie par partie :
 
 ## 3. Le dossier `algorithmes/` : les méthodes de résolution
 
-### `grasp_tabou_cvrptw.py` : GRASP + recherche tabou
+### `grasp_tabou_cvrptw.py` : la métaheuristique GRASP + Tabou
 
-Même logique que le workshop du sac à dos, adaptée au CVRPTW. Les données sont dans des
-variables globales (`n`, `q`, `Q`, `tw`, `s`, `dist`), remplies par `charger_instance(...)`
+C'est **une seule méthode** : le GRASP construit une solution, la recherche tabou l'améliore,
+et on recommence (multi-start) tant qu'il reste du temps. Même logique que le workshop du
+sac à dos, adaptée au CVRPTW. Les données sont dans des variables globales (`n`, `q`, `Q`, `tw`, `s`, `dist`), remplies par `charger_instance(...)`
 ou par `methodes.preparer(...)`.
 
 | Partie | Fonctions | Rôle |
 |---|---|---|
-| 1. Données | `charger_instance` | remplit les variables globales et la matrice des distances |
+| 1. Données | `charger_instance` | remplit les variables globales, la matrice des distances (calculée avec numpy, avec l'arrondi des références) et les plus proches voisins de chaque client |
 | 2. Fonctions de base | `cout_tournee`, `cout_solution`, `tournee_valide` | coût d'une tournée ; capacité et fenêtres de temps (attente autorisée) |
-| 3. Construction GRASP | `grasp_construction(alpha)` | construit les tournées une par une. À chaque étape : les clients possibles sont classés par distance (+ un peu d'urgence de fenêtre) ; on garde les meilleurs dans une liste restreinte (RCL : score ≤ min + alpha × (max − min)) et on en tire un au hasard. alpha = 0 : glouton pur ; alpha = 1 : hasard pur |
-| 4. Voisinage | `voisinage`, `tournees_modifiees`, `mouvement_valide`, `appliquer_mouvement` | un voisin = **déplacer** un client (relocate), **échanger** deux clients (swap) ou **inverser** un morceau de tournée (2-opt, en option). Le coût d'un voisin se calcule **par différence** avec 3 ou 4 distances, sans recalculer toute la solution |
+| 3. Construction GRASP | `grasp_construction(alpha)` | construit les tournées une par une. À chaque étape : les clients possibles (testés en O(1) grâce à la charge et à l'heure du camion, sans re-simuler la tournée) sont classés par distance (+ un peu d'urgence de fenêtre) ; on garde les meilleurs dans une liste restreinte (RCL : score ≤ min + alpha × (max − min)) et on en tire un au hasard. alpha = 0 : glouton pur ; alpha = 1 : hasard pur |
+| 4. Voisinage | `voisinage`, `tournees_modifiees`, `mouvement_valide`, `appliquer_mouvement` | un voisin = **déplacer** un client juste avant ou après un de ses voisins (relocate), **échanger** deux clients voisins (swap) ou **inverser** un morceau de tournée (2-opt, en option). Le coût d'un voisin se calcule **par différence** avec 3 ou 4 distances, sans recalculer toute la solution |
 | 5. Recherche tabou | `recherche_tabou` | va au meilleur voisin non tabou, même s'il est moins bon (pour sortir des optimums locaux). Les clients déplacés deviennent tabous ; un mouvement tabou reste permis s'il bat le record (**critère d'aspiration**). Arrêt après `iter_max` itérations sans amélioration ou à `heure_fin` |
 | 6. Multi-start | `grasp_tabou` | répète construction GRASP + tabou jusqu'au temps maximum et garde la meilleure solution |
 | Contrôle | `verifier_solution` | chaque client visité une fois et toutes les tournées valides |
 
-Deux séries de lignes ont été ajoutées pour l'interface. Elles ne changent rien quand le
-fichier est utilisé seul (notebook, benchmark) :
+**Passage à l'échelle** (partie 7 du notebook) : distances calculées avec numpy,
+construction incrémentale, et au-delà de 500 clients (`SEUIL_KNN`) chaque client ne regarde
+que ses `K_VOISINS = 30` plus proches voisins. En dessous, il regarde tous les clients : sur
+les petites instances à fenêtres larges, le voisinage restreint dégradait les résultats.
 
-* **`# AJOUT interface`** : `depart` (heure de départ des camions), `trajet()` (durée avec
-  trafic), `k_max` (pas de nouveau camion s'il n'en reste plus), `suivi` (courbe de convergence).
-* **`# AMÉLIORATION`** : `proches[i]` = les 40 clients les plus proches de i. La construction
-  les regarde en premier, et le voisinage ne déplace un client que vers les tournées qui
-  passent près de lui. C'est la piste « voisinage aux k plus proches voisins » du bilan du
-  notebook : sur 12 instances (10 s, alpha = 0,2), le gap moyen passe de 7,6 % à 5,7 % (tabou)
-  et de 43,7 % à 6,8 % (GRASP).
+Les lignes marquées **`# AJOUT interface`** servent à l'interface : `depart` (heure de départ
+des camions), `trajet()` (durée avec trafic), `k_max` (pas de nouveau camion s'il n'en reste
+plus), `suivi` (courbe de convergence). Avec leurs valeurs par défaut, elles ne changent
+rien au benchmark.
 
 ### `plne.py` : la méthode exacte
 
@@ -146,47 +146,44 @@ Le PLNE du livrable 1, résolu par CBC via PuLP. Version à 2 indices (`x_ij`) a
 solveur. Contraintes : visite unique, continuité, nombre de camions, **MTZ** (capacité et
 pas de sous-tour), **big-M** pour les fenêtres de temps. Limitée à 15 clients : au-delà, le
 temps de calcul explose (problème NP-difficile). Elle sert à **prouver l'optimum** des
-petites instances et à vérifier que les métaheuristiques le retrouvent.
+petites instances et à vérifier que GRASP + Tabou le retrouve.
 
 ### `methodes.py` : les méthodes de l'interface
 
-1. `preparer(instance)` remplit les variables globales de `grasp_tabou_cvrptw.py` à partir
-   du dictionnaire `instance` : mêmes distances, heure de départ, nombre de camions, trafic
-   et les 40 voisins les plus proches.
-2. Deux métaheuristiques, pour pouvoir les **comparer** :
-   * `tabou` : une seule construction gloutonne (alpha = 0), puis la recherche tabou jusqu'au
-     temps maximum ;
-   * `grasp` : construction randomisée + tabou court, répétés jusqu'au temps maximum.
-3. `METHODES` liste les 3 méthodes (tabou, GRASP, PLNE) ; `lancer(...)` en lance une, la
+1. `preparer(instance)` charge l'instance avec `charger_instance` de l'équipe (donc avec ses
+   plus proches voisins), puis donne les réglages de l'interface : mêmes distances, heure
+   de départ, nombre de camions, trafic.
+2. `grasp_tabou(...)` lance la métaheuristique jusqu'au temps maximum.
+3. `METHODES` liste les 2 méthodes (GRASP + Tabou, PLNE) ; `lancer(...)` en lance une, la
    chronomètre et garde la courbe de convergence.
 
-Toutes ont la même forme : `methode(instance, temps_max, graine, suivi) → routes`. Les
-paramètres (`alpha`, `taille_tabou`, `iter_max`, `taille_echantillon`) ont les valeurs par
-défaut du benchmark de l'équipe (dont alpha = 0,1, le meilleur réglage de l'étude de
-sensibilité) et peuvent varier dans l'étude de sensibilité.
+Les deux ont la même forme : `methode(instance, temps_max, graine, suivi) → routes`. Les
+paramètres (`alpha`, `taille_tabou`, `iter_max`, `taille_echantillon`) ont les valeurs du
+benchmark de l'équipe (alpha automatique : 0,1 jusqu'à 500 clients, 0 au-delà) et
+peuvent varier dans l'étude de sensibilité de l'interface.
 
 ---
 
 ## 4. L'interface : `app.py` et le dossier `interface/`
 
 `streamlit run app.py` ouvre une page web. **À gauche** : l'instance, le trafic, la méthode,
-le temps maximum et le bouton ▶ Lancer. **Au centre**, 4 onglets :
+le temps maximum et le bouton ▶ Lancer. **Au centre**, 3 onglets :
 
 | Onglet | Contenu |
 |---|---|
-| 🚚 Tournées | distance, gap (🟢 ≤ 7 %, 🟠 7-10 %, 🔴 > 10 %), camions, temps de calcul, contraintes respectées ou non, carte, parcours de chaque camion, planning |
+| 🚚 Tournées | distance, gap (🟢 ≤ 7 %, 🟠 7-10 %, 🔴 > 10 %), camions, temps de calcul, contraintes respectées ou non, carte, parcours de chaque camion, planning, courbe de convergence |
 | 🗺️ Suivi 3D / 2D | les camions roulent et leur trajet se dessine (▶ Lecture) |
-| ⚖️ Comparer | toutes les méthodes sur la même instance, et leur courbe de convergence |
-| 📊 Étude expérimentale | plusieurs instances, plusieurs graines : qualité, robustesse, familles, temps, sensibilité, Wilcoxon |
+| 📊 Étude expérimentale | plusieurs instances, plusieurs graines : qualité, robustesse, familles, temps, sensibilité |
 
-Les résultats sont gardés en mémoire (`st.session_state`) : on passe du tabou au GRASP sans
-tout relancer. Le gap n'apparaît que pour les instances qui ont une solution de référence,
+Jusqu'à 15 clients, on peut aussi choisir la PLNE : si les deux méthodes ont été lancées,
+leurs distances sont comparées (elles sont égales quand GRASP + Tabou trouve l'optimum).
+Les résultats sont gardés en mémoire (`st.session_state`). Le gap n'apparaît que pour les instances qui ont une solution de référence,
 et pas avec le trafic (les références sont calculées sans trafic).
 
 ### `graphiques.py`
 
-* `carte_instance`, `carte_tournees` : les clients et les tournées, une couleur par camion ;
-  `carte_reelle` : la même chose sur un fond OpenStreetMap pour la Lorraine.
+* `carte_tournees` : les tournées, une couleur par camion ; `carte_reelle` : la même chose
+  sur un fond OpenStreetMap pour la Lorraine.
 * `gantt` : le planning de chaque camion (trajet en gris, attente en jaune, livraison en vert).
 * `suivi` : l'animation. Pour chaque camion, on liste ses **points clés** (heure, position) :
   départ, arrivée et fin de livraison chez chaque client, retour. Entre deux points on
@@ -196,7 +193,8 @@ et pas avec le trafic (les références sont calculées sans trafic).
 
 ### `etude.py` : l'onglet Étude expérimentale
 
-`executer(...)` lance chaque méthode sur chaque instance avec chaque graine et `sauvegarder`
+`executer(...)` lance GRASP + Tabou sur chaque instance avec chaque graine (et chaque valeur
+du paramètre étudié) ; `sauvegarder`
 écrit un CSV dans `resultats/`, avec les mêmes colonnes que `benchmark_vrplib.py`
 (`instance, famille, n, algorithme, graine, cout, bks, gap_%, camions, temps_s, valide`),
 plus `temps_meilleure_s`, le moment où la meilleure solution a été trouvée. Une fonction par
@@ -204,15 +202,15 @@ point du sujet :
 
 | Demande du sujet | Fonction |
 |---|---|
-| qualité des solutions (gap) | `resume_par_methode`, `graphique_gap` |
-| robustesse | `resume_par_methode` (variation du coût d'une graine à l'autre) |
+| qualité des solutions (gap) | `resume_qualite`, `graphique_gap` |
+| robustesse | `resume_qualite` (variation du coût d'une graine à l'autre) |
 | comportement selon le type d'instance | `resume_par_famille` |
 | temps de calcul selon la taille | `graphique_temps`, `pente_complexite` (temps ≈ a·nᵇ) |
 | sensibilité aux paramètres | `graphique_sensibilite` |
-| analyse statistique | `test_wilcoxon` (tabou contre GRASP ; p < 0,05 : différence significative) |
 
-Les méthodes utilisent tout le temps donné : le temps étudié est donc celui où la meilleure
-solution a été trouvée.
+La méthode utilise tout le temps donné : le temps étudié est donc celui où la meilleure
+solution a été trouvée. Le test statistique (Wilcoxon) qui compare les versions est dans la
+partie 8 du notebook.
 
 ---
 
@@ -224,7 +222,7 @@ solution a été trouvée.
   manquent dans `instances/` (utile sur Colab).
 * `charger_vrplib(nom)` charge l'instance dans `grasp_tabou_cvrptw.py` avec les conventions
   d'arrondi des BKS, et renvoie le coût de la meilleure solution connue.
-* `tester(nom, graine, temps_max, …)` lance GRASP + tabou et renvoie une ligne de résultat
+* `tester(nom, graine, temps_max, …)` lance GRASP + Tabou et renvoie une ligne de résultat
   (coût, BKS, gap, temps, validité).
 * `python benchmark_vrplib.py 20` : les 20 instances (18 Solomon, 2 X), 20 s chacune ;
   écrit `resultats/resultats_20s.csv` et `resultats/gap_par_instance_20s.png`. Les résultats
@@ -273,11 +271,13 @@ l'exemple du livrable 1.
 
 ## 7. Choix à justifier à l'oral
 
+* **GRASP + Tabou, une seule méthode** : le GRASP apporte la diversité (des départs
+  différents), la recherche tabou l'intensification (améliorer chaque départ).
 * **Séparer calcul et vérification** : les méthodes renvoient des tournées, `evaluer()` les
   juge toutes de la même façon.
 * **PLNE à 2 indices** : équivalente au modèle du livrable 1 car les camions sont identiques,
   et plus rapide.
-* **Coût par différence et 40 plus proches voisins** : ce sont les deux accélérations qui
+* **Coût par différence, construction incrémentale et plus proches voisins** : ce sont les accélérations qui
   permettent de traiter des milliers de clients.
 * **Arrêt au temps** plutôt qu'au nombre d'itérations : c'est la contrainte réelle d'un
   utilisateur, mais une machine plus rapide fait plus d'itérations, donc les résultats
@@ -287,17 +287,3 @@ l'exemple du livrable 1.
   connue de C101 n'est plus réalisable (deux fenêtres dépassées).
 * **20 instances** couvrant CVRP et CVRPTW, des fenêtres serrées et larges, des clients
   aléatoires, en grappes ou mixtes, et de 8 à 3 000 clients.
-
----
-
-## 8. Ajouter une méthode
-
-1. Écrire une fonction `ma_methode(instance, temps_max=30, graine=0, suivi=None, **parametres)`
-   qui renvoie les tournées, par exemple `[[3, 7, 1], [5, 2]]`. Utiliser
-   `instance["distance"]` (ne pas recalculer les distances) et, avec le trafic,
-   `temps_trajet(...)`. Appeler `suivi(iteration, meilleur_cout)` à chaque record pour la
-   courbe de convergence.
-2. L'ajouter au dictionnaire `METHODES` de `algorithmes/methodes.py`, et à la liste `algos`
-   de `app.py`.
-
-La vérification, le gap, les graphiques et l'étude fonctionnent alors sans autre modification.
