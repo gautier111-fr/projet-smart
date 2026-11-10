@@ -45,11 +45,11 @@ if ev["realisable"]:
 else:
     st.error("❌ " + " ; ".join(ev["violations"][:10]))
 
-# 4. Le suivi 2D : position de chaque camion à 60 heures de la journée.
+# 4. Le suivi 2D : position de chaque camion à 100 heures de la journée.
 #    Un camion va en ligne droite d'un lieu au suivant, et reste sur place pendant
 #    l'attente et la livraison (np.interp interpole entre ces points de passage).
 xy = inst["coords"]
-heures = np.linspace(min(t["depart"] for t in ev["tournees"]), max(t["retour"] for t in ev["tournees"]), 60)
+heures = np.linspace(min(t["depart"] for t in ev["tournees"]), max(t["retour"] for t in ev["tournees"]), 100)
 lignes = []
 for t in ev["tournees"]:
     lieux, passages = [0], [t["depart"]]                # départ du dépôt
@@ -77,6 +77,10 @@ suivi.add_scatter(x=xy[:1, 0], y=xy[:1, 1], mode="markers", name="Dépôt",
                   marker=dict(symbol="square", size=15, color="black"))
 suivi.update_yaxes(scaleanchor="x")                     # même échelle en x et en y
 suivi.update_layout(showlegend=ev["nb_vehicules"] <= 20)
+# Lecture : 0,1 s par image et pas de glissement entre deux images (sinon les points
+# laissent une traînée et on croit en voir plusieurs).
+suivi.layout.updatemenus[0].buttons[0].args[1].update(frame=dict(duration=100), transition=dict(duration=0))
+suivi.layout.sliders[0].transition.duration = 0
 st.plotly_chart(suivi, width="stretch")
 st.caption("Cliquez sur ▶ (sous la carte) pour voir les camions avancer heure par heure.")
 
