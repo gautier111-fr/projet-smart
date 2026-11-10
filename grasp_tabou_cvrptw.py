@@ -298,7 +298,7 @@ def appliquer_mouvement(solution, mouvement):
 # =============================================================================
 
 def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
-                    taille_echantillon=None):
+                    taille_echantillon=None, heure_fin=None):
     """
     1. On part de la solution GRASP
     2. On prend le meilleur voisin dont le mouvement n'est pas tabou
@@ -317,6 +317,9 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
 
     nb_iter = 0
     while nb_iter < iter_max:
+        # arrêt forcé si le temps total est dépassé (grandes instances)
+        if heure_fin and time.time() > heure_fin:
+            break
         meilleur_mvt, delta_meilleur = None, float("inf")
 
         for delta, mvt in voisinage(solution_courante, taille_echantillon):
@@ -363,7 +366,8 @@ def grasp_tabou(nb_starts=10, alpha=0.3, taille_tabou=10, iter_max=50,
 
     for k in range(nb_starts):
         sol = grasp_construction(alpha)
-        sol = recherche_tabou(sol, taille_tabou, iter_max, taille_echantillon)
+        fin = debut + temps_max if temps_max else None
+        sol = recherche_tabou(sol, taille_tabou, iter_max, taille_echantillon, fin)
         c = cout_solution(sol)
         if verbose:
             print(f"start {k + 1:3d} : coût = {c:9.1f}  ({len(sol)} camions)")

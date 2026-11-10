@@ -76,13 +76,14 @@ def charger_vrplib(nom):
 # -----------------------------------------------------------------------------
 # 2. Lancer une instance et calculer le gap
 # -----------------------------------------------------------------------------
-def tester(nom, graine=0, temps_max=20):
+def tester(nom, graine=0, temps_max=20, alpha=0.2, taille_tabou=10,
+           iter_max=30, taille_echantillon=25):
     random.seed(graine)
     bks = charger_vrplib(nom)
 
     t0 = time.time()
-    sol, cout = g.grasp_tabou(nb_starts=100, alpha=0.2, taille_tabou=10,
-                              iter_max=30, taille_echantillon=25,
+    sol, cout = g.grasp_tabou(nb_starts=1000, alpha=alpha, taille_tabou=taille_tabou,
+                              iter_max=iter_max, taille_echantillon=taille_echantillon,
                               temps_max=temps_max, verbose=False)
     duree = time.time() - t0
 
