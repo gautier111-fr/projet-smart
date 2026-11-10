@@ -6,7 +6,26 @@ scripts d'expérience et les résultats. Les questions probables et leurs répon
 fin (partie 9). Pour installer et lancer le projet, voir le [README](README.md).
 
 L'interface (`app.py`) n'est qu'un affichage : elle appelle les fonctions décrites ici
-(partie 10).
+(partie 10). La partie 11 suit pas à pas ce qui se passe quand on clique sur ▶ Lancer, la
+partie 12 répond aux questions sur le code lui-même, et la partie 13 liste **toutes** les
+fonctions du projet.
+
+### Le code en chiffres : 1 473 lignes de Python (commentaires compris)
+
+| Fichier | Lignes | Rôle |
+|---|---|---|
+| `algorithmes/grasp_tabou_cvrptw.py` | 492 | la métaheuristique GRASP + Tabou |
+| `probleme/instances.py` | 187 | lire, créer et lister les instances |
+| `etude_statistique.py` | 172 | les 4 expériences de l'étude statistique |
+| `benchmark_vrplib.py` | 147 | le gap sur les instances de référence |
+| `probleme/contraintes.py` | 130 | vérification des solutions, trafic, gap |
+| `app.py` | 112 | l'interface |
+| `probleme/lorraine.py` | 111 | les 2 instances sur de vraies villes de Moselle |
+| `algorithmes/plne.py` | 64 | la méthode exacte |
+| `algorithmes/methodes.py` | 58 | le lien entre l'interface et les deux méthodes |
+
+Le notebook recopie trois de ces fichiers (cellules `%%writefile`) et ajoute 251 lignes de code
+pour ses tableaux, graphiques et tests.
 
 ---
 
@@ -121,6 +140,18 @@ longitude approximatives) : LOR-Metz-agglo (10 clients, créneaux) et LOR-Mosell
 * demandes de 5 à 30 colis, camions de 100 colis (120 pour la Moselle-Est) ;
 * tirages avec une **graine fixe** (2026) : l'instance est toujours la même ;
 * trafic : bouchons de 7h à 9h et de 16h30 à 19h (× 1,5), midi (× 1,2).
+
+Les données sont dans deux dictionnaires : `COMMUNES` (nom → latitude, longitude) et `SCENARIOS`
+(dépôt, communes livrées, créneaux ou non, nombre de camions, capacité).
+* **`creer_instance_lorraine(nom)`** : convertit latitude / longitude en km (1° de latitude =
+  111,32 km, 1° de longitude = 111,32 × cos 49° km : projection simple, suffisante à l'échelle
+  d'une région), tire les demandes et les créneaux avec la graine 2026, appelle
+  `construire_instance`, puis multiplie les distances par 1,3 (km → minutes). Elle ajoute
+  `heure_depart` (6h00), `villes` (les noms, affichés dans l'interface) et `profil_trafic`.
+* **`lister_instances_lorraine()`** : la liste des 2 scénarios au même format que
+  `lister_instances()`, avec un chemin spécial `lorraine:NOM`. `charger_instance` reconnaît ce
+  préfixe et appelle `creer_instance_lorraine` au lieu de lire un fichier.
+* `OPTIMUM_CONNU` : 113,2 pour LOR-Metz-agglo (calculé par la PLNE), qui sert de référence au gap.
 
 ---
 
@@ -291,6 +322,23 @@ Points clés :
   pour les mouvements intéressants (`mouvement_valide`), car elle coûte plus cher.
 * Un nouveau camion n'est ouvert que s'il en reste un (`k_max`).
 
+Les petites fonctions du voisinage :
+* **`autour(tournee, p)`** renvoie le précédent et le suivant du client en position p (0, le
+  dépôt, aux deux bouts). Ce sont les a et b des formules ci-dessus.
+* **`clients_touches(solution, mouvement)`** : les clients qu'on rend tabous après le mouvement
+  (le client déplacé pour relocate, les deux clients pour swap, les deux extrémités pour 2-opt).
+* **`tournees_modifiees`** construit seulement les 1 ou 2 tournées changées par le mouvement ;
+  **`mouvement_valide`** les teste avec `tournee_valide` ; **`appliquer_mouvement`** les remet
+  dans une copie de la solution. Elle ajoute une tournée vide à la fin (place pour un nouveau
+  camion), puis retire les tournées vides : **c'est ainsi qu'un camion disparaît**, quand un
+  relocate déplace le dernier client d'une tournée.
+
+Deux détails du relocate :
+* on insère c **avant la position p2** ; on essaie p2 = position du voisin v (juste avant v)
+  et p2 + 1 (juste après v) ;
+* dans la même tournée, c est d'abord retiré : si x ou y vaut c, on les remplace par a ou b
+  (les vrais voisins une fois c retiré), et les positions après c reculent d'un cran.
+
 ### 5.5 La recherche tabou : `recherche_tabou(...)`
 ```
 courante = solution GRASP ; meilleure = courante
@@ -374,6 +422,17 @@ chronomètre et renvoie les tournées et le temps de calcul. `METHODES` contient
 | 4 | Sensibilité | alpha (0 à 0,7) puis taille tabou (3 à 40), 3 instances, 10 s | `4_sensibilite.*` |
 
 `python etude_statistique.py` (environ 25 min) ou `python etude_statistique.py 1 3`.
+
+Les fonctions :
+* **`lancer(liste_essais, fichier)`** : lance `benchmark_vrplib.tester` pour chaque essai (un
+  dictionnaire de paramètres), ajoute ces paramètres aux résultats et écrit le CSV.
+* **`experience_robustesse()`** : 6 instances × 5 graines ; moyenne, écart-type, min, max ;
+  boîte à moustaches avec la ligne des 7 %.
+* **`experience_convergence()`** : 4 instances × 4 durées ; une courbe par instance.
+* **`experience_taille()`** : chronomètre **une** construction GRASP (alpha = 0), puis lance
+  60 s ; deux courbes (gap et temps de construction selon n).
+* **`experience_sensibilite()`** : on fait varier **un seul paramètre à la fois** (alpha, puis
+  la taille de la liste tabou), les autres gardent leur valeur par défaut.
 
 ### Le dossier `resultats/`
 * `resultats_20s.csv` / `.png` : benchmark final ; `_alpha02` et `_alpha01` : les versions
@@ -510,5 +569,173 @@ le nombre de camions, le temps, les contraintes respectées ou non, la carte des
 le parcours de chaque camion. La carte est aussi un **suivi 2D** : à 100 moments de la journée (affichés en vrai horaire, « 7h29 », pour la Lorraine, et en % de la journée pour les autres instances, dont le temps est une unité abstraite égale à la distance),
 on calcule la position de chaque camion avec `np.interp` (il va en ligne droite d'un lieu au
 suivant et reste sur place pendant l'attente et la livraison), et le bouton ▶ fait défiler ces
-heures. Tout tient dans `app.py` (environ 90 lignes, sans logique de calcul) : il n'y a rien à
+heures. Tout tient dans `app.py` (112 lignes, sans logique de calcul) : il n'y a rien à
 connaître de plus pour répondre sur la méthode.
+
+---
+
+## 11. Pas à pas : ce qui se passe quand on clique sur ▶ Lancer
+
+1. **Streamlit relance tout `app.py` à chaque clic.** Tant que le bouton n'est pas cliqué,
+   `st.stop()` arrête le script avant le calcul.
+2. **L'instance :** `lister_instances()` donne la liste (nom → chemin). `charger_instance(chemin)`
+   lit le fichier `.vrp` (et le `.sol` pour la BKS) et renvoie le dictionnaire ; pour la Lorraine,
+   le chemin `lorraine:NOM` mène à `creer_instance_lorraine`. L'exemple du livrable 1 vient de
+   `exemple_livrable1()`.
+3. **Le trafic** (si activé) : `inst["trafic"]` reçoit le profil de la Lorraine, ou
+   `PROFIL_TRAFIC_DEFAUT` pour les autres. La PLNE n'est proposée que si n ≤ 15.
+4. **`lancer(methode, inst, temps_max)`** (`methodes.py`) démarre le chronomètre et appelle la
+   méthode choisie :
+   * **GRASP + Tabou :** `random.seed(0)`, puis `preparer(inst)` : `charger_instance` du code de
+     l'équipe (variables globales, plus proches voisins), puis on remplace `dist` par les
+     distances de l'instance (avec les bons arrondis), on fixe `depart`, `k_max` et `trajet`
+     (le trafic). Ensuite `grasp_tabou(...)` répète construction + tabou jusqu'à la fin du temps.
+   * **PLNE :** `plne_exacte` écrit le modèle et le fait résoudre par CBC.
+
+   `lancer` convertit les tournées en listes d'entiers, retire les tournées vides, et renvoie
+   les tournées et le temps de calcul. Si aucune tournée n'est trouvée (PLNE arrêtée sans
+   solution), elle affiche « essayez avec plus de temps ».
+5. **`evaluer(inst, routes)`** revérifie tout et calcule les horaires de chaque arrêt.
+6. **`gap(distance, bks)`**, seulement sans trafic (les références sont calculées sans trafic).
+7. **Affichage :** 4 indicateurs, contraintes respectées ou non, suivi 2D, tableau des tournées.
+
+---
+
+## 12. Questions sur le code
+
+**Pourquoi des variables globales dans `grasp_tabou_cvrptw.py` ?**
+Comme dans le workshop : c'est simple, et les fonctions n'ont pas à passer l'instance partout.
+La contrepartie : une seule instance à la fois. C'est pour ça qu'on appelle `charger_instance`
+(ou `preparer`) avant chaque résolution.
+
+**Pourquoi deux vérifications, `tournee_valide` et `evaluer` ?**
+`tournee_valide` est interne à l'algorithme : rapide, elle répond seulement vrai / faux, pour
+décider des mouvements. `evaluer` est le juge indépendant : elle vérifie toutes les
+contraintes, donne les messages d'erreur et les horaires. Elles appliquent la même règle :
+attente si trop tôt, refus si trop tard, retour avant la fermeture du dépôt.
+
+**Pourquoi deux façons de charger une instance ?**
+Le benchmark (`benchmark_vrplib.charger_vrplib`) lit le fichier et appelle directement
+`charger_instance` de l'algorithme : il tient seul, et on peut le lancer sur Colab.
+L'interface passe par `probleme/instances.py` (un dictionnaire, utile pour l'affichage et
+`evaluer`), puis par `methodes.preparer`. Les arrondis sont les mêmes (« dixieme » et
+« troncature » coupent tous deux au dixième, « entier » arrondit) : les distances sont donc
+identiques.
+
+**Pourquoi `yield` dans `voisinage` ?**
+C'est un générateur : les mouvements sont produits un par un, au moment où la recherche tabou
+les lit. On ne stocke jamais une liste de milliers de mouvements.
+
+**Pourquoi `deque(maxlen=10)` pour la liste tabou ?**
+Quand elle contient 10 clients, en ajouter un retire automatiquement le plus ancien. C'est
+exactement une liste tabou de taille fixe, sans code en plus.
+
+**Pourquoi `1e-9` (et `1e-6` dans `evaluer`) ?**
+Les nombres à virgule ont des erreurs d'arrondi (0,1 + 0,2 ne vaut pas exactement 0,3). Ces
+petites marges évitent de compter comme un record une solution égale, ou de déclarer en retard
+un camion qui arrive pile à l'heure.
+
+**Pourquoi convertir la matrice numpy en listes ?**
+numpy est rapide pour calculer tout le tableau d'un coup. Mais pour lire une case à la fois
+(`dist[i][j]`, des millions de fois), une liste Python est plus rapide.
+
+**Pourquoi `nb_starts=10**9` ?**
+C'est un « infini » : on ne veut pas limiter le nombre de départs, c'est le temps qui arrête.
+
+**Quelle différence entre `iter_max` et `heure_fin` ?**
+`iter_max` (30 itérations sans amélioration) termine **une** recherche tabou : on repart d'une
+nouvelle construction. `heure_fin` termine **tout** quand le temps est écoulé.
+
+**À quoi sert `random.seed(graine)` ?**
+Avec la même graine, le hasard tire les mêmes nombres : le même lancement donne le même
+résultat (à vitesse de machine égale, car l'arrêt est au temps).
+
+**Que se passe-t-il si un client ne rentre dans aucun camion ?**
+`grasp_construction` ne peut même pas ouvrir une tournée avec lui : elle lève une erreur
+(« Clients impossibles à servir »), car l'instance n'a pas de solution.
+
+**Comment le nombre de camions peut-il diminuer ?**
+Quand un relocate déplace le dernier client d'une tournée, la tournée devient vide et
+`appliquer_mouvement` la supprime. Un relocate vers une tournée vide ouvre un camion (s'il en
+reste un, `k_max`).
+
+**Pourquoi le swap ne regarde-t-il que d'autres tournées ?**
+C'est un choix : on échange avec les proches voisins placés dans une autre tournée. À
+l'intérieur d'une tournée, le relocate permet déjà de changer l'ordre.
+
+**Comment le trafic arrive-t-il dans l'algorithme ?**
+`preparer` remplace la fonction `trajet` de l'algorithme par `temps_trajet` de
+`contraintes.py`. La construction et `tournee_valide` appellent `trajet(i, j, heure)` : elles
+tiennent donc compte de l'heure. Le coût minimisé reste la distance.
+
+**Pourquoi le trafic utilise-t-il un pourcentage de la journée ?**
+Les instances n'ont pas la même échelle de temps. `coefficient_trafic` calcule
+100 × heure / horizon et cherche la tranche. Pour la Lorraine, l'horizon vaut 1 200 min
+(20h) : 7h = 420 min = 35 %, ce qui correspond aux tranches de `TRAFIC_LORRAINE`.
+
+**Que fait la PLNE si CBC n'a pas fini ?**
+À la limite de temps, PuLP rend la meilleure solution trouvée (pas forcément optimale). On
+accepte les statuts « Optimal » et « Not Solved » ; si aucune valeur n'est disponible, il n'y a
+pas de tournée et l'interface demande plus de temps. La solution est de toute façon revérifiée
+par `evaluer`.
+
+**Comment la PLNE reconstruit-elle les tournées ?**
+Elle garde les arcs x_ij > 0,5 (les variables valent 0 ou 1, à des arrondis près). Chaque arc
+qui part du dépôt commence un camion ; on suit le successeur de chaque client jusqu'à revenir
+au dépôt.
+
+**Comment marche le suivi 2D ?**
+Pour chaque camion, on connaît ses points de passage : départ du dépôt, puis pour chaque client
+l'arrivée et la fin de la livraison (deux fois le même lieu : le camion reste sur place), puis
+le retour. `np.interp(h, heures, x)` donne la position x à l'heure h en ligne droite entre deux
+passages (pareil pour y). On le fait à 100 moments, et plotly en fait une animation.
+
+**Comment tester le code de l'algorithme seul ?**
+`python algorithmes/grasp_tabou_cvrptw.py` résout l'exemple du livrable 1 et une instance
+aléatoire de 100 clients, et vérifie que les solutions sont valides. Il affiche 33,8 pour
+l'exemple, et non 33,9 : ce test utilise les distances exactes, alors que l'optimum 33,9 est
+calculé avec les distances arrondies au dixième. Dans l'interface (distances arrondies),
+GRASP + Tabou trouve bien 33,9.
+
+---
+
+## 13. Toutes les fonctions du projet
+
+| Fichier | Fonction | Ce qu'elle fait |
+|---|---|---|
+| `probleme/instances.py` | `matrice_distances` | distances euclidiennes + arrondi des références |
+| | `construire_instance` | range les données dans le dictionnaire instance |
+| | `famille_instance` | déduit la famille du nom (C, R, RC, X…) |
+| | `charger_instance` | lit un `.vrp` et son `.sol` (ou une instance de Lorraine) |
+| | `lister_instances` | les 20 instances de l'interface |
+| | `exemple_livrable1` | l'exemple à 6 clients du livrable 1 |
+| `probleme/lorraine.py` | `creer_instance_lorraine` | construit une instance sur de vraies communes |
+| | `lister_instances_lorraine` | les 2 scénarios de Lorraine |
+| `probleme/contraintes.py` | `coefficient_trafic` | coefficient de la tranche horaire |
+| | `temps_trajet` | durée d'un trajet selon l'heure de départ |
+| | `evaluer` | vérifie toutes les contraintes, calcule les horaires |
+| | `gap` | écart en % à la référence |
+| `algorithmes/plne.py` | `plne_exacte` | modèle PLNE résolu par CBC |
+| `algorithmes/grasp_tabou_cvrptw.py` | `trajet` | durée d'un trajet (remplacée si trafic) |
+| | `charger_instance` | variables globales, matrice, plus proches voisins |
+| | `cout_tournee`, `cout_solution` | fonction objectif |
+| | `tournee_valide` | capacité + fenêtres d'une tournée |
+| | `grasp_construction` | construction gloutonne randomisée (RCL) |
+| | `autour` | précédent et suivant d'un client |
+| | `voisinage` | génère les mouvements et leur delta |
+| | `tournees_modifiees` | les tournées changées par un mouvement |
+| | `clients_touches` | les clients à rendre tabous |
+| | `mouvement_valide` | le mouvement respecte-t-il les contraintes ? |
+| | `appliquer_mouvement` | la nouvelle solution |
+| | `recherche_tabou` | la recherche tabou |
+| | `grasp_tabou` | le multi-start |
+| | `verifier_solution` | contrôle final |
+| `algorithmes/methodes.py` | `preparer` | charge l'instance dans l'algorithme |
+| | `grasp_tabou` | lance GRASP + Tabou avec les bons réglages |
+| | `lancer` | lance une méthode et la chronomètre |
+| `benchmark_vrplib.py` | `telecharger` | récupère une instance manquante |
+| | `charger_vrplib` | lit une instance VRPLIB dans l'algorithme |
+| | `tester` | une résolution, son gap et sa validité |
+| `etude_statistique.py` | `lancer` | lance une série d'essais, écrit le CSV |
+| | `experience_robustesse` … `experience_sensibilite` | les 4 expériences |
+| `app.py` | `moment` | heure affichée (« 7h29 » ou « 35.3 % ») |

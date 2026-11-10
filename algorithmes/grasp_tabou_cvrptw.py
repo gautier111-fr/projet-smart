@@ -379,7 +379,7 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
     Différence avec le workshop : on rend tabou un MOUVEMENT (le client déplacé)
     au lieu de la solution entière -> plus efficace pour le VRP.
     AJOUT interface : suivi(iteration, cout) est appelé à chaque nouveau record
-                      (courbe de convergence de l'interface).
+                      (pour tracer une convergence ; l'interface ne s'en sert pas).
     """
     liste_tabou = deque(maxlen=taille_tabou)
 

@@ -112,7 +112,7 @@ def famille_instance(nom):
 
 def charger_instance(chemin):
     """Lit un fichier .vrp (et son .sol s'il existe) avec la bibliothèque vrplib."""
-    if chemin.startswith("lorraine:"):                  # instances inventées (Metz / Nancy)
+    if chemin.startswith("lorraine:"):                  # instances inventées (Moselle)
         from probleme.lorraine import creer_instance_lorraine
         return creer_instance_lorraine(chemin[len("lorraine:"):])
     # Les fichiers Solomon d'origine (.txt) ont un format différent du format VRPLIB
@@ -168,7 +168,7 @@ def lister_instances():
         liste.append({"nom": nom, "type": "CVRPTW" if "TW" in entete["TYPE"] else "CVRP",
                       "n": int(entete["DIMENSION"]) - 1, "chemin": chemin})
     from probleme.lorraine import lister_instances_lorraine
-    liste += lister_instances_lorraine()                # villes de Metz / Nancy
+    liste += lister_instances_lorraine()                # villes de Moselle
     return sorted(liste, key=lambda i: (i["type"], i["n"], i["nom"]))
 
 
