@@ -8,8 +8,6 @@ métaheuristiques retrouvent l'optimum sur les petites instances.
 
 import pulp
 
-DERNIER_STATUT = ""    # "Optimal" si CBC a prouvé l'optimalité avant la limite de temps
-
 
 def plne_exacte(instance, temps_max=60, graine=0, suivi=None):
     """Modèle PLNE du livrable 1 (version à 2 indices : comme les camions sont
@@ -50,9 +48,6 @@ def plne_exacte(instance, temps_max=60, graine=0, suivi=None):
             pb += T[j] + s[j] + c[j, 0] <= fen[0, 1] + M * (1 - x[j, 0])
 
     pb.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=temps_max))
-    global DERNIER_STATUT
-    # "Optimal" seulement si CBC a prouvé l'optimalité avant la limite de temps
-    DERNIER_STATUT = pulp.LpStatus[pb.status] if pb.sol_status == 1 else "Limite de temps"
     if pulp.LpStatus[pb.status] not in ("Optimal", "Not Solved"):
         raise RuntimeError(f"Le solveur n'a pas trouvé de solution ({pulp.LpStatus[pb.status]}).")
 

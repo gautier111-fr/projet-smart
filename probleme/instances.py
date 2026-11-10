@@ -5,7 +5,9 @@ Une instance est un dictionnaire (voir construire_instance). Le sommet 0 est le 
 les clients vont de 1 à n. Tout le projet utilise la même matrice instance["distance"],
 calculée avec l'arrondi des solutions de référence : sinon le gap serait faux.
 
-Lancé seul (python -m probleme.instances), ce fichier recrée les instances de instances/GENERE.
+Les instances de instances/GENERE ont été créées une fois (clients uniformes ou en grappes,
+dépôt au centre ou dans un coin, fenêtres serrées ou aucune) ; l'optimum de la plus petite
+a été calculé par la PLNE.
 """
 
 import glob
@@ -177,7 +179,7 @@ def lister_instances():
 
 
 # ---------------------------------------------------------------------------
-# 4. Instances créées par nous
+# 4. L'exemple du livrable 1
 # ---------------------------------------------------------------------------
 
 def exemple_livrable1():
@@ -189,103 +191,3 @@ def exemple_livrable1():
     return construire_instance("Exemple livrable 1", coords, demande, 12, fenetres,
                                service, nb_vehicules=2, arrondi="0.1",
                                famille="Exemple pédagogique", bks=33.9)
-
-
-def generer_instance(n=100, repartition="uniforme", position_depot="centre",
-                     fenetres="aucune", graine=0):
-    """Génère un scénario d'usage réaliste.
-
-    repartition    : "uniforme" (zone rurale), "clusters" (quartiers urbains), "mixte"
-    position_depot : "centre" (entrepôt en ville) ou "coin" (entrepôt en périphérie)
-    fenetres       : "aucune" (CVRP), "larges" ou "serrées" (CVRPTW)
-    """
-    rng = np.random.default_rng(graine)
-    # Même échelle que les instances de référence : 0-1000 (X) ou 0-100 (Solomon)
-    taille = 1000.0 if fenetres == "aucune" else 100.0
-
-    def uniformes(k):
-        return rng.uniform(0, taille, (k, 2))
-
-    def en_clusters(k):
-        centres = rng.uniform(0.1 * taille, 0.9 * taille, (max(3, k // 30), 2))
-        choix = rng.integers(0, len(centres), k)
-        return np.clip(centres[choix] + rng.normal(0, 0.04 * taille, (k, 2)), 0, taille)
-
-    if repartition == "uniforme":
-        clients = uniformes(n)
-    elif repartition == "clusters":
-        clients = en_clusters(n)
-    else:
-        clients = np.vstack([uniformes(n // 2), en_clusters(n - n // 2)])
-    depot = [taille / 2, taille / 2] if position_depot == "centre" else [0.0, 0.0]
-    coords = np.round(np.vstack([depot, clients]), 1)   # arrondi pour pouvoir sauvegarder
-    demande = np.concatenate([[0], rng.integers(1, 31, n)])
-    capacite = 150                                       # ~10 clients par tournée
-
-    nom = f"GEN-{repartition}-{position_depot}-{fenetres}-n{n}-g{graine}".replace("é", "e")
-    if fenetres == "aucune":
-        return construire_instance(nom, coords, demande, capacite, arrondi="entier",
-                                   famille=famille_instance(nom))
-
-    horizon, s = 1000.0, 10.0
-    service = np.full(n + 1, s)
-    d = matrice_distances(coords, "troncature")
-    largeur = 60.0 if fenetres == "serrées" else 300.0
-    tw = [(0.0, horizon)]
-    for i in range(1, n + 1):
-        plus_tot = d[0, i]                               # on ne peut pas arriver avant
-        plus_tard = horizon - s - d[i, 0]                # il faut pouvoir rentrer au dépôt
-        centre = rng.uniform(plus_tot, plus_tard)
-        tw.append((max(0.0, centre - largeur / 2), min(plus_tard, centre + largeur / 2)))
-    return construire_instance(nom, coords, demande, capacite, tw, service,
-                               arrondi="troncature", famille=famille_instance(nom))
-
-
-def sauvegarder_instance(inst, chemin):
-    """Écrit une instance au format VRPLIB (pour la réutiliser dans le benchmark)."""
-    donnees = {
-        "NAME": inst["nom"],
-        "TYPE": inst["type"],
-        "DIMENSION": inst["n"] + 1,
-        "CAPACITY": int(inst["capacite"]),
-        "EDGE_WEIGHT_TYPE": "EUC_2D",
-        "NODE_COORD_SECTION": [[round(x, 2), round(y, 2)] for x, y in inst["coords"]],
-        "DEMAND_SECTION": [int(v) for v in inst["demande"]],
-    }
-    if inst["fenetres"] is not None:
-        donnees["SERVICE_TIME_SECTION"] = [float(v) for v in inst["service"]]
-        donnees["TIME_WINDOW_SECTION"] = [[float(a), float(b)] for a, b in inst["fenetres"]]
-    donnees["DEPOT_SECTION"] = [1]
-    vrplib.write_instance(chemin, donnees)
-
-
-# ---------------------------------------------------------------------------
-# 5. Création des instances de instances/GENERE (déjà faite)
-# ---------------------------------------------------------------------------
-
-# Pour les petites, la PLNE calcule l'optimum, enregistré comme référence (.sol).
-SCENARIOS_GENERES = [
-    # (n, répartition, dépôt, fenêtres, description)
-    (8, "uniforme", "centre", "serrées", "petite tournée de quartier (optimum par PLNE)"),
-    (200, "clusters", "centre", "serrées", "centre-ville, quartiers denses, créneaux serrés"),
-    (2000, "clusters", "coin", "aucune", "grande métropole : plusieurs milliers de clients"),
-]
-
-
-if __name__ == "__main__":
-    from algorithmes import plne
-    from probleme.contraintes import evaluer
-
-    DOSSIER = os.path.join(DOSSIER_INSTANCES, "GENERE")
-    os.makedirs(DOSSIER, exist_ok=True)
-    for n, repartition, depot, fenetres, description in SCENARIOS_GENERES:
-        inst = generer_instance(n, repartition, depot, fenetres, graine=1)
-        chemin = os.path.join(DOSSIER, inst["nom"] + ".vrp")
-        sauvegarder_instance(inst, chemin)
-        print(f"{inst['nom']:45s} {description}")
-        if n <= 12:
-            routes = plne.plne_exacte(inst, temps_max=300)
-            if plne.DERNIER_STATUT == "Optimal":
-                cout = evaluer(inst, routes)["distance"]
-                vrplib.write_solution(chemin[:-4] + ".sol", routes, {"Cost": round(cout, 1)})
-                print(f"    optimum PLNE = {cout:.1f}")
