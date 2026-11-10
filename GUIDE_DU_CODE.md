@@ -5,8 +5,8 @@ données, la vérification des contraintes, la PLNE, la métaheuristique GRASP +
 scripts d'expérience et les résultats. Les questions probables et leurs réponses sont à la
 fin (partie 9). Pour installer et lancer le projet, voir le [README](README.md).
 
-L'interface (`app.py`, dossier `interface/`) n'est qu'un affichage : elle appelle les
-fonctions décrites ici. Il n'est pas nécessaire de connaître son code (partie 10).
+L'interface (`app.py`) n'est qu'un affichage : elle appelle les fonctions décrites ici
+(partie 10).
 
 ---
 
@@ -320,9 +320,10 @@ solution. Comme la construction est aléatoire, chaque départ explore une autre
 * `verifier_solution(S)` : contrôle final (chaque client une fois, toutes les tournées valides).
 * Lancé seul (`python algorithmes/grasp_tabou_cvrptw.py`), le fichier teste l'exemple du
   livrable 1 et une instance aléatoire de 100 clients.
-* Les lignes **`# AJOUT interface`** (`depart`, `trajet()`, `k_max`, `suivi`) servent à
-  l'interface : heure de départ des camions, trafic, nombre de camions, courbe de
-  convergence. Avec leurs valeurs par défaut, elles ne changent rien au benchmark.
+* Les lignes **`# AJOUT interface`** (`depart`, `trajet()`, `k_max`) servent à
+  l'interface : heure de départ des camions, trafic, nombre de camions. Avec leurs valeurs
+  par défaut, elles ne changent rien au benchmark. (Le paramètre `suivi` de
+  `recherche_tabou` et `grasp_tabou` permet de suivre la convergence ; il n'est pas utilisé.)
 
 ### 5.8 Paramètres
 
@@ -347,7 +348,7 @@ solution. Comme la construction est aléatoire, chaque départ explore une autre
 `preparer(instance)` appelle `charger_instance` de ce fichier, puis lui donne les distances de
 l'instance (avec les bons arrondis), l'heure de départ, le nombre de camions et le trafic.
 `grasp_tabou(...)` lance la méthode avec les paramètres ci-dessus, et `lancer(...)` la
-chronomètre. `METHODES` contient les deux méthodes : GRASP + Tabou et PLNE.
+chronomètre et renvoie les tournées et le temps de calcul. `METHODES` contient les deux méthodes : GRASP + Tabou et PLNE.
 
 ---
 
@@ -501,10 +502,9 @@ L'algorithme l'utilise pour vérifier les fenêtres de temps (`trajet()`), et `e
 
 ## 10. L'interface (en bref)
 
-`streamlit run app.py` ouvre une page web pour **démontrer** la méthode : on choisit une
-instance, le trafic, la méthode (GRASP + Tabou, ou PLNE jusqu'à 15 clients) et le temps de
-calcul. Elle affiche le résultat de `evaluer()` (coût, gap, contraintes), une carte, le
-planning des camions, un suivi animé 3D / 2D, et une étude expérimentale qui refait les
-analyses du notebook sur les 20 instances. Son code (`app.py`, `interface/graphiques.py`,
-`interface/etude.py`) ne contient que de l'affichage : il n'y a rien à connaître de plus
-pour répondre sur la méthode.
+`streamlit run app.py` ouvre une page web pour **démontrer** la méthode. À gauche : l'instance,
+le trafic, la méthode (GRASP + Tabou, ou PLNE jusqu'à 15 clients) et le temps de calcul. Après
+▶ Lancer, `app.py` appelle `lancer(...)` puis `evaluer(...)`, et affiche la distance, le gap,
+le nombre de camions, le temps, les contraintes respectées ou non, la carte des tournées et
+le parcours de chaque camion. Tout tient dans `app.py` (environ 70 lignes, sans logique de
+calcul) : il n'y a rien à connaître de plus pour répondre sur la méthode.

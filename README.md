@@ -22,7 +22,7 @@ des solutions, la recherche tabou les améliore, et on recommence tant qu'il res
 | La PLNE du livrable 1, résolue par CBC | `algorithmes/plne.py` |
 | Le benchmark sur les instances de référence VRPLIB (gap) | `benchmark_vrplib.py` |
 | L'étude statistique (robustesse, convergence, taille, sensibilité) | `etude_statistique.py` |
-| Une interface web pour lancer, vérifier et visualiser les tournées, et faire l'étude expérimentale | `app.py` |
+| Une interface web simple pour lancer une méthode et voir les tournées | `app.py` |
 | L'explication de chaque partie du code | **[`GUIDE_DU_CODE.md`](GUIDE_DU_CODE.md)** |
 
 ## Installation
@@ -52,7 +52,7 @@ projet-smart/
 ├── README.md                 ce fichier
 ├── GUIDE_DU_CODE.md          l'explication de chaque fichier et de chaque partie du code
 ├── Projet_Smart.ipynb        le notebook du livrable
-├── app.py                    ▶ l'interface (3 onglets)
+├── app.py                    ▶ l'interface
 ├── benchmark_vrplib.py       ▶ le benchmark VRPLIB
 ├── etude_statistique.py      ▶ l'étude statistique
 ├── requirements.txt          les bibliothèques à installer
@@ -66,13 +66,10 @@ projet-smart/
 │   ├── grasp_tabou_cvrptw.py GRASP + Tabou (le code de l'équipe)
 │   ├── plne.py               PLNE (méthode exacte)
 │   └── methodes.py           les 2 méthodes de l'interface et leur lancement chronométré
-├── interface/                ce qui ne sert qu'à l'interface
-│   ├── graphiques.py         cartes, planning, suivi 3D / 2D, convergence
-│   └── etude.py              l'onglet « Étude expérimentale »
 │
 ├── instances/                toutes les instances (.vrp) et leurs meilleures solutions connues (.sol)
 ├── resultats/                les CSV et graphiques produits
-└── images/                   les captures de l'interface (notebook, partie 10)
+└── images/                   la capture de l'interface (notebook, partie 10)
 ```
 
 Règle de rangement : **à la racine, ce qu'on lance ; dans les dossiers, le code rangé par thème.**

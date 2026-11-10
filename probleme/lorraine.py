@@ -153,9 +153,7 @@ def creer_instance_lorraine(nom):
         inst["horizon"] = 1200.0
     inst["heure_depart"] = 360.0                      # les camions partent à 6h00
     inst["villes"] = lieux                            # pour afficher les noms
-    inst["latlon"] = np.column_stack([lat, lon])      # pour la vraie carte
     inst["profil_trafic"] = TRAFIC_LORRAINE
-    inst["description"] = scenario["description"]
     return inst
 
 
