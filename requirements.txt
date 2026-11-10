@@ -1,7 +1,8 @@
 numpy
 pandas
+scipy
+matplotlib
 plotly
 streamlit>=1.40
 vrplib
 pulp==2.9.0
-scipy

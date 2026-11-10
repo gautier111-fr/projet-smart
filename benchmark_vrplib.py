@@ -17,7 +17,7 @@ import time
 import urllib.request
 
 import vrplib
-import grasp_tabou_cvrptw as g   # notre code GRASP + Tabou
+from algorithmes import grasp_tabou_cvrptw as g   # notre code GRASP + Tabou
 
 
 # -----------------------------------------------------------------------------
@@ -123,7 +123,8 @@ if __name__ == "__main__":
 
     df = pd.DataFrame(resultats)
     df["famille"] = df["instance"].str.extract(r"^([A-Z]+\d?)")[0]
-    df.to_csv(f"resultats_{TEMPS}s.csv", index=False)
+    os.makedirs("resultats", exist_ok=True)
+    df.to_csv(f"resultats/resultats_{TEMPS}s.csv", index=False)
 
     print("\n=== Gap moyen par famille ===")
     print(df.groupby("famille")[["gap_%", "temps_s"]].mean().round(2))
@@ -137,4 +138,4 @@ if __name__ == "__main__":
     plt.title(f"Gap par instance (GRASP + Tabou, {TEMPS} s)")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"gap_par_instance_{TEMPS}s.png")
+    plt.savefig(f"resultats/gap_par_instance_{TEMPS}s.png")

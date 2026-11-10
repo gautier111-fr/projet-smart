@@ -1,5 +1,5 @@
 """
-benchmark.py - Étude expérimentale (onglet 📊 de l'interface).
+etude.py - L'onglet « Étude expérimentale » de l'interface.
 
 On lance chaque méthode sur chaque instance, plusieurs fois (graines), et on enregistre
 une ligne par essai dans un CSV, au même format que le benchmark de l'équipe :
@@ -13,13 +13,8 @@ Ce que demande le sujet, et la fonction qui y répond :
     temps de calcul selon la taille                 -> graphique_temps, pente_complexite
     sensibilité aux paramètres                      -> graphique_sensibilite
     analyse statistique (tabou contre GRASP)        -> test_wilcoxon
-
-En ligne de commande, pour une longue campagne :
-    python benchmark.py --graines 5 --temps 60
 """
 
-import argparse
-import glob
 import os
 import time
 
@@ -29,45 +24,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 from scipy import stats
 
-import solveurs
-from instances_lorraine import lister_instances_lorraine
-from vrp_commun import charger_instance, evaluer, famille_instance, gap
-from visualisation import COULEUR_ALGO, COULEURS
+from algorithmes.methodes import lancer
+from interface.graphiques import COULEUR_ALGO, COULEURS
+from probleme.contraintes import evaluer, gap
+from probleme.instances import charger_instance
 
-DOSSIER = os.path.dirname(os.path.abspath(__file__))
-DOSSIER_INSTANCES = os.path.join(DOSSIER, "instances")
-DOSSIER_RESULTATS = os.path.join(DOSSIER, "resultats")
+DOSSIER_RESULTATS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                 "resultats")
 SEUIL_GAP = 7          # au-delà de 7-10 % de gap, la note est limitée à B (sujet)
-
-
-# ---------------------------------------------------------------------------
-# Liste des instances disponibles
-# ---------------------------------------------------------------------------
-def lister_instances():
-    """Parcourt les sous-dossiers de instances/ (CVRP, VRPTW, GENERE) et lit juste l'en-tête
-    de chaque fichier. Les fichiers posés directement dans instances/ servent au
-    benchmark_vrplib.py de l'équipe : on ne les compte pas deux fois."""
-    liste = []
-    for chemin in glob.glob(os.path.join(DOSSIER_INSTANCES, "*", "*.vrp")):
-        entete = {}
-        with open(chemin, encoding="utf-8", errors="replace") as f:
-            for ligne in f:
-                if "SECTION" in ligne:
-                    break
-                if ":" in ligne:
-                    cle, valeur = ligne.split(":", 1)
-                    entete[cle.strip()] = valeur.strip()
-        nom = entete.get("NAME", os.path.basename(chemin)[:-4])
-        liste.append({
-            "nom": nom,
-            "famille": famille_instance(nom),
-            "type": "CVRPTW" if "TW" in entete.get("TYPE", "") else "CVRP",
-            "n": int(entete["DIMENSION"]) - 1,
-            "bks connue": os.path.exists(chemin[:-4] + ".sol"),
-            "chemin": chemin,
-        })
-    liste += lister_instances_lorraine()                # villes de Metz / Nancy
-    return sorted(liste, key=lambda i: (i["type"], i["n"], i["nom"]))
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +56,7 @@ def executer(chemins, configurations, graines, temps_max, progression=None):
                 ligne = {"instance": inst["nom"], "famille": inst["famille"], "n": inst["n"],
                          "algorithme": etiquette, "graine": graine}
                 try:
-                    routes, temps, historique = solveurs.lancer(algo, inst, temps_max, graine,
+                    routes, temps, historique = lancer(algo, inst, temps_max, graine,
                                                                 parametres)
                     ev = evaluer(inst, routes)
                     ecart = gap(ev["distance"], inst["bks"])
@@ -230,22 +194,3 @@ def graphique_sensibilite(df, parametre):
     fig.update_layout(template="plotly_white", height=400, xaxis_title=parametre,
                       yaxis_title="Gap moyen (%)", title=f"Sensibilité au paramètre « {parametre} »")
     return fig
-
-
-# ---------------------------------------------------------------------------
-# Ligne de commande
-# ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    parseur = argparse.ArgumentParser(description="Étude expérimentale : tabou et GRASP")
-    parseur.add_argument("--graines", type=int, default=3, help="nombre de répétitions")
-    parseur.add_argument("--temps", type=float, default=30, help="temps max par essai (s)")
-    args = parseur.parse_args()
-
-    algos = ["Recherche tabou", "GRASP"]
-    instances = [i["chemin"] for i in lister_instances()]
-    print(f"{len(instances)} instances x {len(algos)} méthodes x {args.graines} graines")
-    resultats = executer(instances, [(a, a, {}) for a in algos], list(range(args.graines)),
-                         args.temps, progression=lambda f, m: print(f"[{100 * f:5.1f} %] {m}"))
-    print(resume_par_methode(resultats).to_string(index=False))
-    print(resume_par_famille(resultats).to_string(index=False))
-    print("Fichier :", sauvegarder(resultats))

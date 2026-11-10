@@ -12,16 +12,17 @@ import json
 import pandas as pd
 import streamlit as st
 
-import benchmark
-import solveurs
-import visualisation as vis
-from vrp_commun import PROFIL_TRAFIC_DEFAUT, charger_instance, evaluer, exemple_livrable1, gap
+from algorithmes.methodes import lancer
+from interface import etude
+from interface import graphiques as vis
+from probleme.contraintes import PROFIL_TRAFIC_DEFAUT, evaluer, gap
+from probleme.instances import charger_instance, exemple_livrable1, lister_instances
 
 st.set_page_config(page_title="Tournées de livraison - CesiCDP", page_icon="🚚", layout="wide")
 
 EXEMPLE = "Exemple du livrable 1"
 PLNE = "PLNE exacte (≤ 15 clients)"
-# Paramètres que l'on peut faire varier dans l'étude de sensibilité (voir adaptateur.py)
+# Paramètres que l'on peut faire varier dans l'étude de sensibilité (voir algorithmes/methodes.py)
 PARAMETRES = {"Recherche tabou": ["taille_tabou", "taille_echantillon"],
               "GRASP": ["alpha", "taille_tabou", "iter_max", "taille_echantillon"]}
 
@@ -33,7 +34,7 @@ def charger(chemin):
 
 @st.cache_data
 def liste_instances():
-    return benchmark.lister_instances()
+    return lister_instances()
 
 
 @st.cache_resource(max_entries=6, show_spinner=False)
@@ -83,7 +84,7 @@ def resoudre_avec(nom_algo):
     """Lance un algorithme et garde son résultat. Renvoie True si tout s'est bien passé."""
     with st.spinner(f"{nom_algo} en cours (au plus {temps_max} s)..."):
         try:
-            routes, temps, historique = solveurs.lancer(nom_algo, inst, temps_max)
+            routes, temps, historique = lancer(nom_algo, inst, temps_max)
         except Exception as erreur:
             st.error(f"{nom_algo} a échoué : {erreur}")
             return False
@@ -235,31 +236,31 @@ with onglets[3]:
     if st.button("▶ Lancer l'étude", type="primary", disabled=not (choisies and configurations)):
         barre = st.progress(0.0)
         fichiers = [i["chemin"] for i in toutes if i["nom"] in choisies]
-        df = benchmark.executer(fichiers, configurations, list(range(nb_graines)), temps_etude,
+        df = etude.executer(fichiers, configurations, list(range(nb_graines)), temps_etude,
                                 progression=lambda f, m: barre.progress(f, text=m))
         if valeur_de:
             df["valeur"] = df["algorithme"].map(valeur_de)
         st.session_state.etude = df
-        st.success(f"Résultats enregistrés dans {benchmark.sauvegarder(df)}")
+        st.success(f"Résultats enregistrés dans {etude.sauvegarder(df)}")
 
     df = st.session_state.get("etude")
     if df is not None and "cout" not in df:
         st.error(f"Tous les essais ont échoué : {df['erreur'].iloc[0]}")
     elif df is not None:
         st.subheader("1. Qualité des solutions et robustesse")
-        st.dataframe(benchmark.resume_par_methode(df), hide_index=True, width="stretch")
+        st.dataframe(etude.resume_par_methode(df), hide_index=True, width="stretch")
         st.caption("Gap calculé sur les instances qui ont une solution de référence. "
                    "Variation entre graines : plus elle est faible, plus la méthode est stable.")
-        st.plotly_chart(benchmark.graphique_gap(df), width="stretch")
+        st.plotly_chart(etude.graphique_gap(df), width="stretch")
 
         st.subheader("2. Selon le type d'instance")
-        st.dataframe(benchmark.resume_par_famille(df), hide_index=True, width="stretch")
+        st.dataframe(etude.resume_par_famille(df), hide_index=True, width="stretch")
         st.caption("Gap moyen (%) par famille : taille, répartition des clients (C regroupés, "
                    "R aléatoires, RC mixtes) et fenêtres de temps (série 1 serrées, 2 larges).")
 
         st.subheader("3. Temps de calcul selon la taille")
-        st.plotly_chart(benchmark.graphique_temps(df), width="stretch")
-        pentes = benchmark.pente_complexite(df)
+        st.plotly_chart(etude.graphique_temps(df), width="stretch")
+        pentes = etude.pente_complexite(df)
         st.caption("Les méthodes utilisent tout le temps donné : on mesure donc le moment où "
                    "elles trouvent leur meilleure solution."
                    + (" Complexité observée (temps ≈ a·nᵇ) : "
@@ -267,9 +268,9 @@ with onglets[3]:
 
         if "valeur" in df:
             st.subheader("4. Sensibilité au paramètre")
-            st.plotly_chart(benchmark.graphique_sensibilite(df, nom_param or "paramètre"),
+            st.plotly_chart(etude.graphique_sensibilite(df, nom_param or "paramètre"),
                             width="stretch")
 
         if {"Recherche tabou", "GRASP"} <= set(df["algorithme"]):
             st.subheader("Test statistique : tabou contre GRASP (Wilcoxon)")
-            st.write(benchmark.test_wilcoxon(df, "Recherche tabou", "GRASP"))
+            st.write(etude.test_wilcoxon(df, "Recherche tabou", "GRASP"))

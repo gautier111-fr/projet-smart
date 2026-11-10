@@ -1,5 +1,5 @@
 """
-instances_lorraine.py - Instances inventées sur de vraies communes autour de Metz et Nancy.
+lorraine.py - Instances inventées sur de vraies communes autour de Metz et Nancy.
 
 Hypothèses simples (à rappeler à l'oral) :
     - position des communes : latitude / longitude réelles (approximatives) ;
@@ -18,7 +18,7 @@ import math
 
 import numpy as np
 
-from vrp_commun import construire_instance
+from probleme.instances import construire_instance
 
 # (nom, latitude, longitude)
 COMMUNES = [
@@ -66,12 +66,13 @@ COMMUNES = [
     ("Baccarat", 48.4497, 6.7392), ("Blâmont", 48.5900, 6.8442),
 ]
 
-# Nom du scénario -> (entrepôt, communes livrées, créneaux ?, nb camions, capacité)
 def _communes_entre(lat_min, lat_max, lon_min, lon_max):
+    """Les communes situées dans un rectangle (latitude, longitude)."""
     return [c[0] for c in COMMUNES
             if lat_min <= c[1] <= lat_max and lon_min <= c[2] <= lon_max]
 
 
+# Nom du scénario -> entrepôt, communes livrées, créneaux ou non, nombre de camions, capacité
 SCENARIOS = {
     "LOR-Metz-agglo": {
         "description": "Petite tournée dans l'agglomération de Metz (optimum calculé par PLNE)",
@@ -108,7 +109,7 @@ SCENARIOS = {
     },
 }
 
-# Optimum prouvé par la PLNE (solveurs.plne_exacte) pour la petite instance
+# Optimum prouvé par la PLNE (algorithmes/plne.py) pour la petite instance
 OPTIMUM_CONNU = {"LOR-Metz-agglo": 113.2}   # minutes de trajet
 
 # Bouchons en % de la journée [0h ; 20h] : 7h = 35 %, 9h = 45 %, etc.
@@ -122,6 +123,7 @@ CRENEAUX = [(480, 720), (840, 1080), (480, 1080)]   # matin, après-midi, journ�
 
 
 def creer_instance_lorraine(nom):
+    """Construit l'instance d'un scénario (toujours la même grâce à la graine fixe)."""
     scenario = SCENARIOS[nom]
     position = {c[0]: (c[1], c[2]) for c in COMMUNES}
     lieux = [scenario["depot"]] + scenario["clients"]
@@ -158,7 +160,7 @@ def creer_instance_lorraine(nom):
 
 
 def lister_instances_lorraine():
-    """Même format que benchmark.lister_instances()."""
+    """Même format que instances.lister_instances()."""
     return [{"nom": nom, "famille": "Lorraine (villes réelles)",
              "type": "CVRPTW" if s["creneaux"] else "CVRP", "n": len(s["clients"]),
              "bks connue": OPTIMUM_CONNU.get(nom) is not None, "chemin": "lorraine:" + nom}

@@ -1,5 +1,5 @@
 """
-visualisation.py - Tous les graphiques de l'interface (bibliothèque Plotly).
+graphiques.py - Tous les graphiques de l'interface (bibliothèque Plotly).
 
 Idée clé pour le suivi des camions : pour chaque camion on construit une liste
 de "points clés" (heure, x, y) : départ du dépôt, arrivée chez chaque client,

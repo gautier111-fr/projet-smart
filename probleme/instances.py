@@ -1,43 +1,27 @@
 """
-vrp_commun.py - Briques communes à TOUT le projet (interface + métaheuristiques).
+instances.py - Les données du problème : lire, créer et lister les instances.
 
-Ce fichier contient :
-    1. le chargement d'une instance (fichier VRPLIB) dans un dictionnaire simple ;
-    2. le calcul de la matrice des distances (avec la bonne convention d'arrondi) ;
-    3. le modèle de trafic (durée d'un trajet selon la tranche horaire) ;
-    4. l'évaluation / vérification d'une solution (capacité, fenêtres, attente...) ;
-    5. le calcul du gap par rapport à la meilleure solution connue (BKS) ;
-    6. la création d'instances : exemple du livrable 1 et générateur de scénarios.
+Une instance est un dictionnaire (voir construire_instance). Le sommet 0 est le dépôt,
+les clients vont de 1 à n. Tout le projet utilise la même matrice instance["distance"],
+calculée avec l'arrondi des solutions de référence : sinon le gap serait faux.
 
-Règle importante : l'interface ET les métaheuristiques utilisent la MÊME matrice
-inst["distance"]. Sinon le gap calculé n'a aucun sens.
+Lancé seul (python -m probleme.instances), ce fichier recrée les instances de instances/GENERE.
 """
 
+import glob
 import os
-from collections import Counter
 
 import numpy as np
 import vrplib
 
-INFINI = float("inf")
-
-# Profil de trafic par défaut : une "journée type" découpée en tranches.
-# debut / fin sont en % de l'horizon de la journée, coef multiplie la durée :
-# coef = 1.6 veut dire que le trajet dure 60 % plus longtemps qu'à vide.
-PROFIL_TRAFIC_DEFAUT = [
-    {"tranche": "Début de journée", "debut": 0, "fin": 10, "coef": 1.0},
-    {"tranche": "Heure de pointe du matin", "debut": 10, "fin": 25, "coef": 1.6},
-    {"tranche": "Matinée", "debut": 25, "fin": 50, "coef": 1.1},
-    {"tranche": "Pause de midi", "debut": 50, "fin": 60, "coef": 1.3},
-    {"tranche": "Après-midi", "debut": 60, "fin": 75, "coef": 1.1},
-    {"tranche": "Heure de pointe du soir", "debut": 75, "fin": 90, "coef": 1.6},
-    {"tranche": "Fin de journée", "debut": 90, "fin": 100, "coef": 1.0},
-]
+DOSSIER_INSTANCES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                 "instances")
 
 
 # ---------------------------------------------------------------------------
 # 1. Distances
 # ---------------------------------------------------------------------------
+
 def matrice_distances(coords, arrondi):
     """Distance euclidienne entre chaque paire de points, puis arrondi.
 
@@ -58,8 +42,9 @@ def matrice_distances(coords, arrondi):
 
 
 # ---------------------------------------------------------------------------
-# 2. Chargement d'une instance
+# 2. Le dictionnaire instance
 # ---------------------------------------------------------------------------
+
 def construire_instance(nom, coords, demande, capacite, fenetres=None, service=None,
                         nb_vehicules=None, arrondi="entier", famille="",
                         bks=None, bks_routes=None):
@@ -124,10 +109,14 @@ def famille_instance(nom):
     return f"VRPTW {lettre}, {fenetre}"
 
 
+# ---------------------------------------------------------------------------
+# 3. Lire les instances
+# ---------------------------------------------------------------------------
+
 def charger_instance(chemin):
     """Lit un fichier .vrp (et son .sol s'il existe) avec la bibliothèque vrplib."""
     if chemin.startswith("lorraine:"):                  # instances inventées (Metz / Nancy)
-        from instances_lorraine import creer_instance_lorraine
+        from probleme.lorraine import creer_instance_lorraine
         return creer_instance_lorraine(chemin[len("lorraine:"):])
     # Les fichiers Solomon d'origine (.txt) ont un format différent du format VRPLIB
     format_fichier = "solomon" if chemin.lower().endswith(".txt") else "vrplib"
@@ -159,115 +148,38 @@ def charger_instance(chemin):
     )
 
 
-# ---------------------------------------------------------------------------
-# 3. Trafic : durée d'un trajet qui dépend de l'heure de départ
-# ---------------------------------------------------------------------------
-def coefficient_trafic(inst, heure):
-    """Coefficient de la tranche horaire qui contient 'heure' (1.0 si aucune)."""
-    pourcentage = 100 * heure / inst["horizon"]
-    for tranche in inst["trafic"]:
-        if tranche["debut"] <= pourcentage < tranche["fin"]:
-            return tranche["coef"]
-    return 1.0
-
-
-def temps_trajet(inst, i, j, depart):
-    """Durée du trajet i -> j quand on part à l'heure 'depart'.
-
-    Sans trafic : durée = distance (convention des instances VRPLIB).
-    Avec trafic : durée = distance x coefficient de la tranche horaire du départ
-    (ex. 1.5 aux heures de pointe : le trajet dure 50 % plus longtemps).
-    """
-    duree = inst["distance"][i, j]
-    if inst.get("trafic"):
-        duree *= coefficient_trafic(inst, depart)
-    return duree
-
-
-# ---------------------------------------------------------------------------
-# 4. Évaluation et vérification d'une solution
-# ---------------------------------------------------------------------------
-def evaluer(inst, routes):
-    """Calcule le planning de chaque camion et vérifie TOUTES les contraintes.
-
-    routes : liste de tournées, chaque tournée = liste de clients (sans le dépôt).
-             Exemple : [[3, 7, 1], [5, 2]]
-    Renvoie un dictionnaire avec la distance, la durée, les violations et le
-    détail de chaque arrêt (arrivée, attente, début de service, fin).
-    """
-    n, d, q = inst["n"], inst["distance"], inst["demande"]
-    fen, s, Q = inst["fenetres"], inst["service"], inst["capacite"]
-    violations = []
-
-    # --- Contrainte 1 : chaque client est livré exactement une fois ---
-    compte = Counter(c for r in routes for c in r)
-    invalides = sorted(c for c in compte if not 1 <= c <= n)
-    manquants = [c for c in range(1, n + 1) if compte[c] == 0]
-    doublons = sorted(c for c, k in compte.items() if k > 1 and 1 <= c <= n)
-    if invalides:
-        violations.append(f"Numéros de clients invalides : {invalides[:10]}")
-    if manquants:
-        violations.append(f"{len(manquants)} client(s) jamais livré(s) : {manquants[:10]}")
-    if doublons:
-        violations.append(f"{len(doublons)} client(s) livré(s) plusieurs fois : {doublons[:10]}")
-
-    # --- Contrainte 5 : nombre de camions disponibles ---
-    routes = [[c for c in r if 1 <= c <= n] for r in routes]
-    routes = [r for r in routes if r]
-    if inst["nb_vehicules"] and len(routes) > inst["nb_vehicules"]:
-        violations.append(f"{len(routes)} camions utilisés pour {inst['nb_vehicules']} disponibles")
-
-    depart = inst.get("heure_depart", fen[0, 0] if fen is not None else 0.0)
-    tournees = []
-    for k, route in enumerate(routes, start=1):
-        t, precedent, distance, arrets = depart, 0, 0.0, []
-        for c in route:
-            arrivee = t + temps_trajet(inst, precedent, c, t)
-            distance += d[precedent, c]
-            ouverture, fermeture = (fen[c] if fen is not None else (0.0, INFINI))
-            debut = max(arrivee, ouverture)            # attente autorisée si on est en avance
-            ok = debut <= fermeture + 1e-6             # interdit de livrer après la fermeture
-            if not ok:
-                violations.append(f"Camion {k} : client {c} livré à {debut:.1f}, "
-                                  f"fenêtre fermée à {fermeture:.0f}")
-            fin = debut + s[c]
-            arrets.append({"client": c, "arrivee": arrivee, "debut": debut,
-                           "attente": debut - arrivee, "fin": fin,
-                           "ouverture": ouverture, "fermeture": fermeture, "ok": ok})
-            t, precedent = fin, c
-        retour = t + temps_trajet(inst, precedent, 0, t)
-        distance += d[precedent, 0]
-        charge = q[route].sum()
-        if charge > Q + 1e-9:                          # contrainte 3 : capacité
-            violations.append(f"Camion {k} : charge {charge:.0f} > capacité {Q:.0f}")
-        if fen is not None and retour > fen[0, 1] + 1e-6:
-            violations.append(f"Camion {k} : retour au dépôt à {retour:.1f} après sa fermeture")
-        tournees.append({"numero": k, "clients": list(route), "charge": charge,
-                         "distance": distance, "depart": depart, "retour": retour,
-                         "duree": retour - depart,
-                         "attente": sum(a["attente"] for a in arrets), "arrets": arrets})
-
-    return {
-        "distance": sum(t["distance"] for t in tournees),   # coût VRPLIB (pour le gap)
-        "duree": sum(t["duree"] for t in tournees),         # durée totale (avec trafic)
-        "attente": sum(t["attente"] for t in tournees),
-        "nb_vehicules": len(tournees),
-        "realisable": not violations,
-        "violations": violations,
-        "tournees": tournees,
-    }
-
-
-def gap(cout, cout_reference):
-    """gap (%) = 100 x (coût trouvé - coût optimal) / coût optimal  (formule du sujet)."""
-    if not cout_reference:
-        return None
-    return 100 * (cout - cout_reference) / cout_reference
+def lister_instances():
+    """Parcourt les sous-dossiers de instances/ (CVRP, VRPTW, GENERE) et lit juste l'en-tête
+    de chaque fichier. Les fichiers posés directement dans instances/ servent au
+    benchmark_vrplib.py de l'équipe : on ne les compte pas deux fois."""
+    liste = []
+    for chemin in glob.glob(os.path.join(DOSSIER_INSTANCES, "*", "*.vrp")):
+        entete = {}
+        with open(chemin, encoding="utf-8", errors="replace") as f:
+            for ligne in f:
+                if "SECTION" in ligne:
+                    break
+                if ":" in ligne:
+                    cle, valeur = ligne.split(":", 1)
+                    entete[cle.strip()] = valeur.strip()
+        nom = entete.get("NAME", os.path.basename(chemin)[:-4])
+        liste.append({
+            "nom": nom,
+            "famille": famille_instance(nom),
+            "type": "CVRPTW" if "TW" in entete.get("TYPE", "") else "CVRP",
+            "n": int(entete["DIMENSION"]) - 1,
+            "bks connue": os.path.exists(chemin[:-4] + ".sol"),
+            "chemin": chemin,
+        })
+    from probleme.lorraine import lister_instances_lorraine
+    liste += lister_instances_lorraine()                # villes de Metz / Nancy
+    return sorted(liste, key=lambda i: (i["type"], i["n"], i["nom"]))
 
 
 # ---------------------------------------------------------------------------
-# 5. Instances "maison"
+# 4. Instances créées par nous
 # ---------------------------------------------------------------------------
+
 def exemple_livrable1():
     """L'instance à 6 clients du livrable 1 (optimum connu : 33,9 min)."""
     coords = [(0, 0), (-4, 3), (-2, 6), (1, 7), (4, 5), (5, 2), (2, 2.5)]
@@ -345,3 +257,35 @@ def sauvegarder_instance(inst, chemin):
         donnees["TIME_WINDOW_SECTION"] = [[float(a), float(b)] for a, b in inst["fenetres"]]
     donnees["DEPOT_SECTION"] = [1]
     vrplib.write_instance(chemin, donnees)
+
+
+# ---------------------------------------------------------------------------
+# 5. Création des instances de instances/GENERE (déjà faite)
+# ---------------------------------------------------------------------------
+
+# Pour les petites, la PLNE calcule l'optimum, enregistré comme référence (.sol).
+SCENARIOS_GENERES = [
+    # (n, répartition, dépôt, fenêtres, description)
+    (8, "uniforme", "centre", "serrées", "petite tournée de quartier (optimum par PLNE)"),
+    (200, "clusters", "centre", "serrées", "centre-ville, quartiers denses, créneaux serrés"),
+    (2000, "clusters", "coin", "aucune", "grande métropole : plusieurs milliers de clients"),
+]
+
+
+if __name__ == "__main__":
+    from algorithmes import plne
+    from probleme.contraintes import evaluer
+
+    DOSSIER = os.path.join(DOSSIER_INSTANCES, "GENERE")
+    os.makedirs(DOSSIER, exist_ok=True)
+    for n, repartition, depot, fenetres, description in SCENARIOS_GENERES:
+        inst = generer_instance(n, repartition, depot, fenetres, graine=1)
+        chemin = os.path.join(DOSSIER, inst["nom"] + ".vrp")
+        sauvegarder_instance(inst, chemin)
+        print(f"{inst['nom']:45s} {description}")
+        if n <= 12:
+            routes = plne.plne_exacte(inst, temps_max=300)
+            if plne.DERNIER_STATUT == "Optimal":
+                cout = evaluer(inst, routes)["distance"]
+                vrplib.write_solution(chemin[:-4] + ".sol", routes, {"Cost": round(cout, 1)})
+                print(f"    optimum PLNE = {cout:.1f}")

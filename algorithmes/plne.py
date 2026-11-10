@@ -1,31 +1,22 @@
 """
-solveurs.py - Les méthodes proposées dans l'interface.
+plne.py - La méthode exacte : le PLNE du livrable 1, résolu par le solveur CBC (via PuLP).
 
-  Recherche tabou et GRASP : le code de l'équipe (grasp_tabou_cvrptw.py), branché par adaptateur.py.
-  PLNE exacte              : le modèle du livrable 1, résolu par CBC (petites instances seulement).
-
-Chaque méthode a la même forme :
-    methode(instance, temps_max, graine, suivi) -> routes   ex. [[3, 7, 1], [5, 2]] (sans le dépôt 0)
+Elle donne la solution optimale, mais le temps de calcul explose avec la taille
+(problème NP-difficile) : on la limite à 15 clients. Elle sert à vérifier que les
+métaheuristiques retrouvent l'optimum sur les petites instances.
 """
 
-import time
+import pulp
 
-from adaptateur import grasp, tabou
-
-DERNIER_STATUT_PLNE = ""   # "Optimal" si la PLNE a prouvé l'optimalité
+DERNIER_STATUT = ""    # "Optimal" si CBC a prouvé l'optimalité avant la limite de temps
 
 
-# ---------------------------------------------------------------------------
-# Méthode exacte : PLNE du livrable 1 résolu par CBC (via PuLP)
-# ---------------------------------------------------------------------------
 def plne_exacte(instance, temps_max=60, graine=0, suivi=None):
     """Modèle PLNE du livrable 1 (version à 2 indices : comme les camions sont
     identiques, x_ij suffit, x_ijk n'apporte rien et ralentit le solveur).
     Réservé aux petites instances : le temps explose au-delà de ~15 clients.
     Le trafic n'est pas pris en compte dans ce modèle (durées fixes c_ij).
     """
-    import pulp
-
     n = instance["n"]
     if n > 15:
         raise ValueError("La PLNE est réservée aux petites instances (15 clients maximum).")
@@ -59,9 +50,9 @@ def plne_exacte(instance, temps_max=60, graine=0, suivi=None):
             pb += T[j] + s[j] + c[j, 0] <= fen[0, 1] + M * (1 - x[j, 0])
 
     pb.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=temps_max))
-    global DERNIER_STATUT_PLNE
+    global DERNIER_STATUT
     # "Optimal" seulement si CBC a prouvé l'optimalité avant la limite de temps
-    DERNIER_STATUT_PLNE = pulp.LpStatus[pb.status] if pb.sol_status == 1 else "Limite de temps"
+    DERNIER_STATUT = pulp.LpStatus[pb.status] if pb.sol_status == 1 else "Limite de temps"
     if pulp.LpStatus[pb.status] not in ("Optimal", "Not Solved"):
         raise RuntimeError(f"Le solveur n'a pas trouvé de solution ({pulp.LpStatus[pb.status]}).")
 
@@ -76,42 +67,3 @@ def plne_exacte(instance, temps_max=60, graine=0, suivi=None):
             courant = suivant[courant]
         routes.append(route)
     return routes
-
-
-# ---------------------------------------------------------------------------
-# Les méthodes proposées dans l'interface
-# ---------------------------------------------------------------------------
-ALGORITHMES = {
-    "Recherche tabou": tabou,
-    "GRASP": grasp,
-    "PLNE exacte (≤ 15 clients)": plne_exacte,
-}
-
-
-def lancer(nom_algo, instance, temps_max=30, graine=0, parametres=None):
-    """Lance un algorithme, chronomètre, et nettoie la sortie.
-
-    Renvoie (routes, temps_de_calcul_en_s, historique) où historique est la
-    liste des (temps, iteration, meilleur_cout) envoyés par 'suivi'.
-    """
-    historique = []
-    debut = time.perf_counter()
-
-    def suivi(iteration, cout):
-        historique.append((time.perf_counter() - debut, iteration, float(cout)))
-
-    resultat = ALGORITHMES[nom_algo](instance, temps_max=temps_max, graine=graine,
-                                     suivi=suivi, **(parametres or {}))
-    temps_calcul = time.perf_counter() - debut
-
-    # Tolérance : on accepte aussi un dict {"routes": ...} ou un tuple (routes, cout)
-    if isinstance(resultat, dict):
-        resultat = resultat["routes"]
-    elif isinstance(resultat, tuple):
-        resultat = resultat[0]
-    # On enlève le dépôt (0) si l'algo l'a laissé dans les tournées
-    routes = [[int(c) for c in r if int(c) != 0] for r in resultat]
-    routes = [r for r in routes if r]
-    if not routes:
-        raise RuntimeError("aucune tournée trouvée : essayez avec plus de temps de calcul.")
-    return routes, temps_calcul, historique

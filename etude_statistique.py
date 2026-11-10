@@ -25,7 +25,7 @@ matplotlib.use("Agg")              # pas de fenêtre : on enregistre les images
 import matplotlib.pyplot as plt
 
 import benchmark_vrplib as b
-import grasp_tabou_cvrptw as g
+from algorithmes import grasp_tabou_cvrptw as g
 
 os.makedirs("resultats", exist_ok=True)
 

@@ -25,7 +25,7 @@ from collections import deque
 # on le laisse en OPTION pour le comparer sur les instances VRPLIB.
 UTILISER_2OPT = False
 
-# AJOUT interface : réglages remplis par l'interface (voir adaptateur.py).
+# AJOUT interface : réglages remplis par l'interface (voir algorithmes/methodes.py).
 # Avec ces valeurs par défaut, le code fonctionne exactement comme avant.
 depart = 0.0      # heure de départ des camions (360 = 6h00 pour les instances de Lorraine)
 k_max = None      # nombre de camions disponibles (None = illimité)
