@@ -1,6 +1,11 @@
 """
 graphiques.py - Tous les graphiques de l'interface (bibliothèque Plotly).
 
+    carte_instance, carte_tournees, carte_reelle : les cartes (onglet Tournées)
+    gantt                                        : le planning de chaque camion
+    suivi                                        : les camions animés, en 3D ou en 2D
+    convergence                                  : le meilleur coût au fil du temps (onglet Comparer)
+
 Idée clé pour le suivi des camions : pour chaque camion on construit une liste
 de "points clés" (heure, x, y) : départ du dépôt, arrivée chez chaque client,
 fin de livraison, retour au dépôt. Entre deux points, on interpole en ligne
@@ -17,6 +22,7 @@ COULEURS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
 COULEUR_DEPOT = "#1f3864"
 GRIS = "#9a9993"
 COULEUR_SOL = "#eef1ea"
+# Grandes villes écrites sur le suivi, pour se repérer (instances de Lorraine)
 VILLES_REPERES = {"Metz", "Nancy", "Thionville", "Forbach", "Toul", "Sarrebourg", "Lunéville", "Longwy"}
 # Couleur fixe par algorithme (une entité garde toujours sa couleur)
 COULEUR_ALGO = {"Recherche tabou": COULEURS[0], "GRASP": COULEURS[1],
