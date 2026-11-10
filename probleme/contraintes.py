@@ -58,7 +58,7 @@ def evaluer(inst, routes):
 
     routes : liste de tournées, chaque tournée = liste de clients (sans le dépôt).
              Exemple : [[3, 7, 1], [5, 2]]
-    Renvoie un dictionnaire avec la distance, la durée, les violations et le
+    Renvoie un dictionnaire avec la distance, le nombre de camions, les violations et le
     détail de chaque arrêt (arrivée, attente, début de service, fin).
     """
     n, d, q = inst["n"], inst["distance"], inst["demande"]
