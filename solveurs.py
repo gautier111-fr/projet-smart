@@ -1,86 +1,18 @@
 """
-solveurs.py - Tous les algorithmes disponibles dans l'interface.
+solveurs.py - Les méthodes proposées dans l'interface.
 
-Le tabou et le GRASP de l'équipe sont dans grasp_tabou_cvrptw.py ; adaptateur.py les
-branche sur l'interface (fonctions tabou et grasp).
+  Recherche tabou et GRASP : le code de l'équipe (grasp_tabou_cvrptw.py), branché par adaptateur.py.
+  PLNE exacte              : le modèle du livrable 1, résolu par CBC (petites instances seulement).
 
-COMMENT BRANCHER UNE AUTRE MÉTAHEURISTIQUE :
-    1. mettre le fichier dans ce dossier ;
-    2. il doit contenir une fonction avec EXACTEMENT cette signature :
-
-        def resoudre(instance, temps_max=30, graine=0, suivi=None, **parametres):
-            ...
-            return routes          # ex : [[3, 7, 1], [5, 2]]  (sans le dépôt 0)
-
-       - instance : dictionnaire créé par vrp_commun.charger_instance
-                    (instance["distance"], instance["demande"], instance["fenetres"]...)
-       - temps_max : temps de calcul autorisé en secondes (critère d'arrêt)
-       - graine    : graine aléatoire (random.seed(graine)) pour pouvoir reproduire
-       - suivi     : fonction optionnelle à appeler quand on trouve mieux :
-                     if suivi: suivi(iteration, meilleur_cout)
-                     -> sert à tracer la courbe de convergence
-       - parametres : réglages propres à l'algo (taille de la liste tabou, alpha...)
-    3. ajouter une ligne dans le dictionnaire FICHIERS_METAHEURISTIQUES ci-dessous.
-
-C'est tout : l'interface, la vérification des contraintes, le gap et le
-benchmark fonctionnent automatiquement avec le nouvel algorithme.
+Chaque méthode a la même forme :
+    methode(instance, temps_max, graine, suivi) -> routes   ex. [[3, 7, 1], [5, 2]] (sans le dépôt 0)
 """
 
-import importlib
-import math
 import time
 
-import numpy as np
-
-from vrp_commun import temps_trajet
+from adaptateur import grasp, tabou
 
 DERNIER_STATUT_PLNE = ""   # "Optimal" si la PLNE a prouvé l'optimalité
-
-
-# ---------------------------------------------------------------------------
-# Algorithme de référence : plus proche voisin (glouton)
-# ---------------------------------------------------------------------------
-def plus_proche_voisin(instance, temps_max=30, graine=0, suivi=None):
-    """Construit les tournées une par une : le camion va toujours au client
-    non livré le plus proche qui respecte la capacité, la fenêtre de temps et
-    lui laisse le temps de rentrer au dépôt. Quand plus aucun client n'est
-    possible, il rentre et un nouveau camion part.
-    Sert de point de comparaison (et de solution initiale classique).
-    """
-    d, q, Q = instance["distance"], instance["demande"], instance["capacite"]
-    fen, s = instance["fenetres"], instance["service"]
-    depart = instance.get("heure_depart", fen[0, 0] if fen is not None else 0.0)
-    fermeture_depot = fen[0, 1] if fen is not None else math.inf
-    non_livres = set(range(1, instance["n"] + 1))
-    routes = []
-
-    while non_livres:
-        route, charge, t, position = [], 0.0, depart, 0
-        while True:
-            candidats = np.fromiter(non_livres, dtype=int)
-            candidats = candidats[np.argsort(d[position, candidats])]  # du plus proche au plus loin
-            choisi = None
-            for j in candidats:
-                if charge + q[j] > Q:                                  # capacité
-                    continue
-                arrivee = t + temps_trajet(instance, position, j, t)
-                debut = max(arrivee, fen[j, 0]) if fen is not None else arrivee
-                if fen is not None and debut > fen[j, 1]:              # fenêtre fermée
-                    continue
-                fin = debut + s[j]
-                if fin + temps_trajet(instance, j, 0, fin) > fermeture_depot:
-                    continue                                           # retour impossible
-                choisi = j
-                break
-            if choisi is None:
-                break
-            route.append(int(choisi))
-            non_livres.discard(choisi)
-            charge, t, position = charge + q[choisi], fin, choisi
-        if not route:                         # client impossible à servir : on le signale
-            route = [non_livres.pop()]        # (l'évaluation affichera la violation)
-        routes.append(route)
-    return routes
 
 
 # ---------------------------------------------------------------------------
@@ -147,28 +79,13 @@ def plne_exacte(instance, temps_max=60, graine=0, suivi=None):
 
 
 # ---------------------------------------------------------------------------
-# Registre des algorithmes
+# Les méthodes proposées dans l'interface
 # ---------------------------------------------------------------------------
 ALGORITHMES = {
-    "Plus proche voisin (référence)": plus_proche_voisin,
+    "Recherche tabou": tabou,
+    "GRASP": grasp,
     "PLNE exacte (≤ 15 clients)": plne_exacte,
 }
-
-# Nom affiché dans l'interface -> (fichier python sans .py, nom de la fonction)
-FICHIERS_METAHEURISTIQUES = {
-    "Recherche tabou": ("adaptateur", "tabou"),
-    "GRASP": ("adaptateur", "grasp"),
-}
-
-ERREURS_CHARGEMENT = {}   # pour afficher dans l'interface pourquoi un algo manque
-
-for nom_affiche, (module, fonction) in FICHIERS_METAHEURISTIQUES.items():
-    try:
-        ALGORITHMES[nom_affiche] = getattr(importlib.import_module(module), fonction)
-    except ModuleNotFoundError:
-        ERREURS_CHARGEMENT[nom_affiche] = f"fichier {module}.py pas encore ajouté"
-    except Exception as erreur:                     # bug dans le fichier de l'équipe
-        ERREURS_CHARGEMENT[nom_affiche] = f"erreur dans {module}.py : {erreur!r}"
 
 
 def lancer(nom_algo, instance, temps_max=30, graine=0, parametres=None):

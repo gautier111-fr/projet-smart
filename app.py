@@ -20,7 +20,6 @@ from vrp_commun import PROFIL_TRAFIC_DEFAUT, charger_instance, evaluer, exemple_
 st.set_page_config(page_title="Tournées de livraison - CesiCDP", page_icon="🚚", layout="wide")
 
 EXEMPLE = "Exemple du livrable 1"
-GLOUTON = "Plus proche voisin (référence)"
 PLNE = "PLNE exacte (≤ 15 clients)"
 # Paramètres que l'on peut faire varier dans l'étude de sensibilité (voir adaptateur.py)
 PARAMETRES = {"Recherche tabou": ["taille_tabou", "taille_echantillon"],
@@ -66,17 +65,12 @@ inst = dict(base)                       # copie : on ne modifie pas l'instance e
 if avec_trafic:
     inst["trafic"] = base.get("profil_trafic", PROFIL_TRAFIC_DEFAUT)
 
-# Le tabou et le GRASP d'abord. Le glouton ne sert qu'en attendant qu'ils soient branchés.
-algos = [a for a in ("Recherche tabou", "GRASP") if a in solveurs.ALGORITHMES]
-if len(algos) < 2:
-    algos.append(GLOUTON)
+algos = ["Recherche tabou", "GRASP"]
 algos_etude = list(algos)               # la PLNE ne passe pas à l'échelle : hors de l'étude
 if inst["n"] <= 15:
     algos.append(PLNE)
 
 algo = st.sidebar.radio("Algorithme", algos)
-for nom_manquant, raison in solveurs.ERREURS_CHARGEMENT.items():
-    st.sidebar.caption(f"⚠️ {nom_manquant} : {raison}")
 temps_max = st.sidebar.slider("Temps de calcul maximum (s)", 1, 300, 30)
 
 # Résultats gardés en mémoire pour chaque instance, avec ou sans trafic : {algo: résultat}

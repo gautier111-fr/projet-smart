@@ -20,7 +20,6 @@ COULEUR_SOL = "#eef1ea"
 VILLES_REPERES = {"Metz", "Nancy", "Thionville", "Forbach", "Toul", "Sarrebourg", "Lunéville", "Longwy"}
 # Couleur fixe par algorithme (une entité garde toujours sa couleur)
 COULEUR_ALGO = {"Recherche tabou": COULEURS[0], "GRASP": COULEURS[1],
-                "Plus proche voisin (référence)": COULEURS[2],
                 "PLNE exacte (≤ 15 clients)": COULEURS[6]}
 
 

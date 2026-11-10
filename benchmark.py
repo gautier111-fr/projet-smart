@@ -241,7 +241,7 @@ if __name__ == "__main__":
     parseur.add_argument("--temps", type=float, default=30, help="temps max par essai (s)")
     args = parseur.parse_args()
 
-    algos = [a for a in ("Recherche tabou", "GRASP") if a in solveurs.ALGORITHMES]
+    algos = ["Recherche tabou", "GRASP"]
     instances = [i["chemin"] for i in lister_instances()]
     print(f"{len(instances)} instances x {len(algos)} méthodes x {args.graines} graines")
     resultats = executer(instances, [(a, a, {}) for a in algos], list(range(args.graines)),
