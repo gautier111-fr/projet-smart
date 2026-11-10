@@ -5,9 +5,8 @@ Une instance est un dictionnaire (voir construire_instance). Le sommet 0 est le 
 les clients vont de 1 à n. Tout le projet utilise la même matrice instance["distance"],
 calculée avec l'arrondi des solutions de référence : sinon le gap serait faux.
 
-Les instances « GEN- » de instances/ ont été créées une fois (clients uniformes ou en grappes,
-dépôt au centre ou dans un coin, fenêtres serrées ou aucune) ; l'optimum de la plus petite
-a été calculé par la PLNE.
+L'instance GEN-uniforme-centre-serrees-n8-g1 a été générée une fois par nous (8 clients au
+hasard, fenêtres serrées) ; son optimum a été calculé par la PLNE.
 """
 
 import os
@@ -142,19 +141,20 @@ def charger_instance(chemin):
     )
 
 
-# Les 15 fichiers de instances/ montrés dans l'interface ; avec les 5 instances de Lorraine,
-# cela fait 20 scénarios variés (taille, répartition des clients, fenêtres de temps).
-# Les autres fichiers de instances/ servent au benchmark de l'équipe (benchmark_vrplib.py).
+# Les 18 fichiers de instances/ montrés dans l'interface ; avec les 2 instances de Lorraine,
+# cela fait 20 instances, toutes étudiées dans le notebook, qui couvrent tous les cas :
 INSTANCES_INTERFACE = [
-    "C101", "C201", "R101", "R201", "RC101", "RC201", "R1_10_1",          # VRPTW (Solomon, Homberger)
-    "X-n101-k25", "X-n200-k36", "X-n502-k39", "X-n1001-k43", "Leuven1",  # CVRP (Uchoa, Arnold)
-    "GEN-uniforme-centre-serrees-n8-g1", "GEN-clusters-centre-serrees-n200-g1",
-    "GEN-clusters-coin-aucune-n2000-g1",                                 # générées par nous
+    "GEN-uniforme-centre-serrees-n8-g1",                  # petite : comparaison avec la PLNE
+    "C101", "C105", "C201", "C205",                       # Solomon : clients regroupés
+    "R101", "R105", "R201", "R205",                       # Solomon : clients aléatoires
+    "RC101", "RC105", "RC201", "RC205",                   # Solomon : mixtes (série 1 = fenêtres serrées, 2 = larges)
+    "X-n101-k25", "X-n200-k36", "X-n502-k39", "X-n1001-k43",   # CVRP (sans fenêtres) de 100 à 1 000 clients
+    "Leuven1",                                            # CVRP : 3 000 clients
 ]
 
 
 def lister_instances():
-    """Les 20 instances de l'interface. Pour chaque fichier, on ne lit que l'en-tête (rapide)."""
+    """Les 20 instances de l'interface (dont les 2 de Lorraine). On ne lit que l'en-tête des fichiers."""
     liste = []
     for nom in INSTANCES_INTERFACE:
         chemin = os.path.join(DOSSIER_INSTANCES, nom + ".vrp")

@@ -84,35 +84,36 @@ l'algorithme, et la comparaison est équitable.
   RC = mixtes ; série 1 = fenêtres serrées, série 2 = fenêtres larges ; X = CVRP d'Uchoa…
 * **`charger_instance(chemin)`** lit un fichier `.vrp` avec la bibliothèque `vrplib`, et le
   `.sol` du même nom s'il existe (coût de la meilleure solution connue).
-* **`INSTANCES_INTERFACE`** et **`lister_instances()`** : les 20 instances étudiées (15 fichiers
-  + 5 de Lorraine). Toutes les instances sont dans le dossier `instances/`, une seule fois.
+* **`INSTANCES_INTERFACE`** et **`lister_instances()`** : les 20 instances de l'interface
+  (18 fichiers + 2 de Lorraine), **toutes étudiées dans le notebook**. Toutes les instances
+  sont dans le dossier `instances/`, une seule fois.
 * **`exemple_livrable1()`** : l'exemple à 6 clients du livrable 1 (Q = 12, K = 2, optimum 33,9).
 
-### Les 20 instances
+### Les 20 instances de l'interface (toutes étudiées dans le notebook)
 
-| Instances | Type | Clients | Origine | Référence pour le gap |
+| Cas montré | Instances | Clients | Référence pour le gap | Dans le notebook |
 |---|---|---|---|---|
-| C101, C201, R101, R201, RC101, RC201 | CVRPTW | 100 | Solomon : regroupés / aléatoires / mixtes ; fenêtres serrées (1) ou larges (2) | BKS |
-| R1_10_1 | CVRPTW | 1 000 | Gehring & Homberger | BKS |
-| X-n101-k25, X-n200-k36, X-n502-k39, X-n1001-k43 | CVRP | 100 à 1 000 | Uchoa et al. 2017 | BKS |
-| Leuven1 | CVRP | 3 000 | Arnold et al. 2019 | BKS |
-| GEN-uniforme-centre-serrees-n8-g1 | CVRPTW | 8 | générée par nous | optimum PLNE 342,4 |
-| GEN-clusters-centre-serrees-n200-g1 | CVRPTW | 200 | générée (centre-ville, créneaux serrés) | — |
-| GEN-clusters-coin-aucune-n2000-g1 | CVRP | 2 000 | générée (métropole, dépôt excentré) | — |
-| LOR-Metz-agglo | CVRPTW | 10 | Lorraine (villes réelles) | optimum PLNE 113,2 |
-| LOR-Moselle-Est, LOR-Nancy-agglo, LOR-Sillon-lorrain, LOR-Lorraine-complete | CVRP / CVRPTW | 15 à 68 | Lorraine | — |
+| petites instances, comparaison avec la PLNE | GEN-uniforme-centre-serrees-n8-g1 (générée), LOR-Metz-agglo (Lorraine, créneaux), LOR-Moselle-Est (Lorraine, sans fenêtres) | 8, 10, 15 | optimum PLNE 342,4 et 113,2 ; aucune pour Moselle-Est | partie 9 |
+| clients regroupés, fenêtres serrées / larges | C101, C105 / C201, C205 | 100 | BKS | benchmark |
+| clients aléatoires, fenêtres serrées / larges | R101, R105 / R201, R205 | 100 | BKS | benchmark |
+| clients mixtes, fenêtres serrées / larges | RC101, RC105 / RC201, RC205 | 100 | BKS | benchmark |
+| sans fenêtres (CVRP), taille croissante | X-n101-k25, X-n200-k36, X-n502-k39, X-n1001-k43 | 100 à 1 000 | BKS | X-n101 : benchmark ; les autres : partie 7 |
+| très grande instance | Leuven1 | 3 000 | BKS | partie 7 |
 
 Elles couvrent ce que le sujet demande d'analyser : la **taille** (8 à 3 000 clients), la
-**répartition** des clients (regroupés, aléatoires, mixtes, en grappes) et les **contraintes**
-(sans fenêtres, fenêtres serrées, fenêtres larges). Les autres fichiers de `instances/`
-(C102, R205, X-n110-k13…) servent au benchmark du notebook.
+**répartition** des clients (regroupés, aléatoires, mixtes) et les **contraintes** (sans
+fenêtres, fenêtres serrées, fenêtres larges). Les instances VRPLIB viennent du dépôt
+PyVRP/Instances (CVRPLIB) ; les autres fichiers de `instances/` (C102, R102, X-n110-k13…)
+complètent le benchmark du notebook.
 
 **Pourquoi le gap est fiable :** en recalculant avec notre code le coût des meilleures
 solutions publiées, on retrouve exactement les valeurs publiées (C101 : 827,3 ; X-n101-k25 :
-27 591 ; R1_10_1 : 53 026,1 ; Leuven1 : 192 848).
+27 591 ; Leuven1 : 192 848).
 
 ### Les instances de Lorraine (`lorraine.py`)
-68 communes de Moselle et de Meurthe-et-Moselle, avec leur vraie position. Hypothèses :
+Deux petites instances sur 25 communes de Moselle, avec leur vraie position (latitude et
+longitude approximatives) : LOR-Metz-agglo (10 clients, créneaux) et LOR-Moselle-Est
+(15 clients, sans créneaux). Elles montrent de vrais horaires et le trafic. Hypothèses :
 * **durée (min) = distance à vol d'oiseau (km) × 1,3** : les routes font environ 30 % de
   détours, et à 60 km/h, 1 km de route prend 1 minute ;
 * dépôt ouvert de 6h00 à 20h00 (360 à 1200 minutes depuis minuit), 15 min par livraison ;

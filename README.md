@@ -60,7 +60,7 @@ projet-smart/
 │
 ├── probleme/                 les données et les règles du problème
 │   ├── instances.py          lire et lister les instances ; matrice des distances
-│   ├── lorraine.py           5 instances sur de vraies villes autour de Metz et Nancy
+│   ├── lorraine.py           2 petites instances sur de vraies villes de Moselle
 │   └── contraintes.py        vérifier une solution, trafic, gap
 ├── algorithmes/              les méthodes de résolution
 │   ├── grasp_tabou_cvrptw.py GRASP + Tabou (le code de l'équipe)
