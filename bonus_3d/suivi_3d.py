@@ -38,14 +38,22 @@ def donnees_scene(inst, ev):
               "nom": noms[i], "demande": float(inst["demande"][i]),
               "fenetre": None if fen is None else [float(fen[i, 0]), float(fen[i, 1])]}
              for i in range(len(xy))]
+    dist = inst["distance"]
+
+    def arrets(t):                       # d = longueur du trajet qui mène à ce client (compteur de vitesse)
+        lieux_tournee = [0] + [int(a["client"]) for a in t["arrets"]]
+        return [{"client": int(a["client"]), "arrivee": float(a["arrivee"]), "debut": float(a["debut"]),
+                 "fin": float(a["fin"]), "d": float(dist[lieux_tournee[k], lieux_tournee[k + 1]])}
+                for k, a in enumerate(t["arrets"])]
+
     camions = [{"numero": t["numero"], "couleur": COULEURS[i % len(COULEURS)],
                 "charge": float(t["charge"]), "depart": float(t["depart"]), "retour": float(t["retour"]),
-                "arrets": [{"client": int(a["client"]), "arrivee": float(a["arrivee"]),
-                            "debut": float(a["debut"]), "fin": float(a["fin"])} for a in t["arrets"]]}
+                "arrets": arrets(t), "d_retour": float(dist[t["arrets"][-1]["client"], 0])}
                for i, t in enumerate(ev["tournees"])]
     return {"nom": inst["nom"], "lorraine": "villes" in inst, "capacite": float(inst["capacite"]),
             "ouverture": float(ouverture), "fermeture": float(fermeture),
             "horizon": float(inst["horizon"]), "trafic": inst.get("trafic"),
+            "km_par_unite": 1 / 1.3 if "villes" in inst else 1.0,     # Lorraine : durée (min) = km x 1,3
             "lieux": lieux, "camions": camions}
 
 
@@ -57,5 +65,6 @@ def afficher_suivi_3d(inst, ev, hauteur=780):
 
     donnees = json.dumps(donnees_scene(inst, ev), ensure_ascii=False).replace("</", "<\\/")
     page = lire("scene.html").replace("__DONNEES__", donnees)
-    page = page.replace("/*THREE*/", lire("lib/three.min.js") + "\n" + lire("lib/OrbitControls.js"))
+    moteur = "\n".join(lire("lib/" + f) for f in ("three.min.js", "OrbitControls.js", "Sky.js"))
+    page = page.replace("/*THREE*/", moteur)
     st.iframe(page, height=hauteur)

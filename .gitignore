@@ -222,3 +222,6 @@ __marimo__/
 # Local
 .claude/
 notebook_colab_original.ipynb
+
+# Moteur 3D du bonus (à garder : il fait marcher le suivi 3D sans internet)
+!bonus_3d/lib/

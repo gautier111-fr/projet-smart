@@ -6,12 +6,20 @@ Elle n'est pas nécessaire pour comprendre ou présenter la méthode.
 
 | Fichier | Rôle |
 |---|---|
-| `suivi_3d.py` | prépare les données (lieux, tournées, horaires) et affiche la scène dans Streamlit |
-| `scene.html` | la scène 3D (three.js) : ville générée, entrepôt, routes, camions animés, jour et nuit, trafic, panneaux |
-| `lib/` | three.js r147 et OrbitControls (licence MIT, voir `lib/LICENSE`), copiés ici pour fonctionner sans internet |
+| `suivi_3d.py` | prépare les données (lieux, tournées, horaires, distances) et affiche la scène dans Streamlit |
+| `scene.html` | la scène 3D (three.js) |
+| `lib/` | three.js r147, OrbitControls et Sky (licence MIT, voir `lib/LICENSE`), copiés ici pour fonctionner sans internet |
 
-Dans la scène : lecture / pause et vitesse (×0,5 à ×8), frise pour avancer dans la journée,
-vue d'ensemble ou suivi d'un camion (clic sur un camion de la liste), vue depuis la cabine,
-infobulle au survol d'un commerce ou de l'entrepôt, journal des livraisons. La ville
-(immeubles, maisons, champs, arbres) est générée au hasard avec une graine fixe : elle est
-toujours la même pour une instance donnée.
+Ce qu'on y voit :
+* **une ville générée** (toujours la même pour une instance) : commerces des clients avec vitrine,
+  store et enseigne ; entrepôt avec quais et bureaux ; tours vitrées, immeubles, maisons ; trottoirs,
+  lampadaires, arbres, champs ; voitures qui circulent ;
+* **la journée** : ciel physique (lever et coucher du soleil, étoiles et lune), ombres, reflets du ciel
+  sur les vitres ; la nuit, fenêtres, enseignes, lampadaires et phares s'allument ; pluie au choix ;
+* **les camions** : ils accélèrent, roulent à droite, freinent (feux stop), clignotent dans les virages,
+  se garent devant le commerce et déposent le colis ; repère au-dessus de chaque client (à livrer,
+  en cours, livré) ;
+* **les vues** : vue d'ensemble, suivi d'un camion (clic sur le camion ou dans la liste) avec GPS et
+  compteur de vitesse, vue depuis la cabine, mode cinéma (la caméra filme seule), plein écran ;
+* **les commandes** : lecture, vitesse ×0,5 à ×8, frise de la journée, son (moteur, ville, pluie),
+  qualité de l'image (baissée automatiquement si l'ordinateur peine).
