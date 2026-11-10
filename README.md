@@ -22,7 +22,7 @@ des solutions, la recherche tabou les améliore, et on recommence tant qu'il res
 | La PLNE du livrable 1, résolue par CBC | `algorithmes/plne.py` |
 | Le benchmark sur les instances de référence VRPLIB (gap) | `benchmark_vrplib.py` |
 | L'étude statistique (robustesse, convergence, taille, sensibilité) | `etude_statistique.py` |
-| Une interface web simple pour lancer une méthode et voir les tournées | `app.py` |
+| Une interface web simple pour lancer une méthode, voir les tournées et suivre les camions en 2D | `app.py` |
 | L'explication de chaque partie du code | **[`GUIDE_DU_CODE.md`](GUIDE_DU_CODE.md)** |
 
 ## Installation

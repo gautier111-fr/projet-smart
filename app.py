@@ -1,10 +1,11 @@
 """
-app.py - L'interface : choisir une instance et une méthode, lancer, voir les tournées.
+app.py - L'interface : choisir une instance et une méthode, lancer, voir et suivre les tournées.
 Lancement : streamlit run app.py   (ou double-clic sur lancer_interface.bat)
 """
 
+import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
 
 from algorithmes.methodes import GRASP_TABOU, PLNE, lancer
@@ -15,24 +16,21 @@ st.set_page_config(page_title="Tournées de livraison", page_icon="🚚", layout
 st.title("🚚 Tournées de livraison")
 
 # 1. Les choix, à gauche
-EXEMPLE = "Exemple du livrable 1"
 chemins = {i["nom"]: i["chemin"] for i in lister_instances()}
-nom = st.sidebar.selectbox("Instance", [EXEMPLE] + list(chemins))
-inst = exemple_livrable1() if nom == EXEMPLE else charger_instance(chemins[nom])
+nom = st.sidebar.selectbox("Instance", ["Exemple du livrable 1"] + list(chemins))
+inst = charger_instance(chemins[nom]) if nom in chemins else exemple_livrable1()
 if st.sidebar.toggle("Trafic selon l'heure"):
     inst["trafic"] = inst.get("profil_trafic", PROFIL_TRAFIC_DEFAUT)
 methode = st.sidebar.radio("Méthode", [GRASP_TABOU] + ([PLNE] if inst["n"] <= 15 else []))
 temps_max = st.sidebar.slider("Temps de calcul maximum (s)", 1, 120, 10)
-
-st.caption(f"{inst['nom']} : {inst['type']}, {inst['n']} clients, capacité {inst['capacite']:.0f}, "
-           f"meilleure solution connue : {inst['bks'] or 'aucune (instance inventée)'}")
+st.caption(f"{inst['type']}, {inst['n']} clients, capacité {inst['capacite']:.0f}, "
+           f"meilleure solution connue : {inst['bks'] or 'aucune'}")
 if not st.sidebar.button("▶ Lancer", type="primary"):
     st.info("Choisissez une instance et une méthode à gauche, puis cliquez sur ▶ Lancer.")
     st.stop()
 
 # 2. La résolution, puis la vérification de toutes les contraintes
-with st.spinner(f"{methode} en cours (au plus {temps_max} s)..."):
-    routes, temps = lancer(methode, inst, temps_max)
+routes, temps = lancer(methode, inst, temps_max)
 ev = evaluer(inst, routes)
 
 # 3. Le résultat
@@ -45,20 +43,44 @@ c[3].metric("Temps de calcul", f"{temps:.1f} s")
 if ev["realisable"]:
     st.success("✅ Toutes les contraintes sont respectées.")
 else:
-    st.error("❌ Contraintes non respectées : " + " ; ".join(ev["violations"][:10]))
+    st.error("❌ " + " ; ".join(ev["violations"][:10]))
 
-# La carte : une ligne par camion, le dépôt en carré noir
-xy, carte = inst["coords"], go.Figure()
+# 4. Le suivi 2D : position de chaque camion à 60 heures de la journée.
+#    Un camion va en ligne droite d'un lieu au suivant, et reste sur place pendant
+#    l'attente et la livraison (np.interp interpole entre ces points de passage).
+xy = inst["coords"]
+heures = np.linspace(min(t["depart"] for t in ev["tournees"]), max(t["retour"] for t in ev["tournees"]), 60)
+lignes = []
 for t in ev["tournees"]:
-    chemin = [0] + t["clients"] + [0]
-    carte.add_trace(go.Scatter(x=xy[chemin, 0], y=xy[chemin, 1], mode="lines+markers",
-                               name=f"Camion {t['numero']}"))
-carte.add_trace(go.Scatter(x=xy[:1, 0], y=xy[:1, 1], mode="markers", name="Dépôt",
-                           marker=dict(symbol="square", size=15, color="black")))
-carte.update_yaxes(scaleanchor="x")                     # même échelle en x et en y
-st.plotly_chart(carte, width="stretch")
+    lieux, passages = [0], [t["depart"]]                # départ du dépôt
+    for a in t["arrets"]:                               # arrivée chez le client, puis fin de livraison
+        lieux += [a["client"], a["client"]]
+        passages += [a["arrivee"], a["fin"]]
+    lieux.append(0)                                     # retour au dépôt
+    passages.append(t["retour"])
+    for h in heures:
+        lignes.append({"heure": round(h), "camion": f"Camion {t['numero']}",
+                       "x": np.interp(h, passages, xy[lieux, 0]), "y": np.interp(h, passages, xy[lieux, 1])})
 
-# Le détail de chaque tournée
+couleurs = px.colors.qualitative.Plotly                # la même couleur pour un camion et sa tournée
+marge = 0.05 * np.ptp(xy)
+suivi = px.scatter(pd.DataFrame(lignes), x="x", y="y", color="camion", animation_frame="heure",
+                   color_discrete_sequence=couleurs, labels={"x": "", "y": "", "camion": ""},
+                   range_x=[xy[:, 0].min() - marge, xy[:, 0].max() + marge],
+                   range_y=[xy[:, 1].min() - marge, xy[:, 1].max() + marge], height=650)
+suivi.update_traces(marker_size=12)
+for i, t in enumerate(ev["tournees"]):                  # les tournées prévues, en trait fin
+    chemin = [0] + t["clients"] + [0]
+    suivi.add_scatter(x=xy[chemin, 0], y=xy[chemin, 1], mode="lines", showlegend=False,
+                      line=dict(width=1, color=couleurs[i % len(couleurs)]))
+suivi.add_scatter(x=xy[:1, 0], y=xy[:1, 1], mode="markers", name="Dépôt",
+                  marker=dict(symbol="square", size=15, color="black"))
+suivi.update_yaxes(scaleanchor="x")                     # même échelle en x et en y
+suivi.update_layout(showlegend=ev["nb_vehicules"] <= 20)
+st.plotly_chart(suivi, width="stretch")
+st.caption("Cliquez sur ▶ (sous la carte) pour voir les camions avancer heure par heure.")
+
+# 5. Le détail de chaque tournée
 nom_lieu = inst.get("villes") or ["Dépôt"] + [f"Client {i}" for i in range(1, inst["n"] + 1)]
 st.dataframe(pd.DataFrame([{
     "Camion": t["numero"],
