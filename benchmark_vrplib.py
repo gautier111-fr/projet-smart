@@ -76,7 +76,7 @@ def charger_vrplib(nom):
 # -----------------------------------------------------------------------------
 # 2. Lancer une instance et calculer le gap
 # -----------------------------------------------------------------------------
-def tester(nom, graine=0, temps_max=20, alpha=0.2, taille_tabou=10,
+def tester(nom, graine=0, temps_max=20, alpha=0.1, taille_tabou=10,
            iter_max=30, taille_echantillon=25):
     random.seed(graine)
     bks = charger_vrplib(nom)
