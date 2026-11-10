@@ -29,6 +29,7 @@ UTILISER_2OPT = False
 # Avec ces valeurs par défaut, le code fonctionne exactement comme avant.
 depart = 0.0      # heure de départ des camions (360 = 6h00 pour les instances de Lorraine)
 k_max = None      # nombre de camions disponibles (None = illimité)
+proches = None    # AMÉLIORATION : proches[i] = les clients les plus proches de i (None = tous)
 
 
 def trajet(i, j, heure):
@@ -135,7 +136,11 @@ def grasp_construction(alpha=0.3):
             dernier = tournee[-1] if tournee else 0
 
             # 1. candidats réalisables
-            candidats = [j for j in non_visites if tournee_valide(tournee + [j])]
+            # AMÉLIORATION : on regarde d'abord les clients proches du dernier (bien plus rapide)
+            voisins = [j for j in proches[dernier] if j in non_visites] if proches else []
+            candidats = [j for j in voisins if tournee_valide(tournee + [j])]
+            if not candidats:   # aucun proche possible : on regarde tous les clients
+                candidats = [j for j in non_visites if tournee_valide(tournee + [j])]
             if not candidats:
                 break  # plus rien ne rentre => on ferme la tournée
 
@@ -200,15 +205,23 @@ def voisinage(solution, taille_echantillon=None):
     if taille_echantillon and len(tous_clients) > taille_echantillon:
         tous_clients = random.sample(tous_clients, taille_echantillon)
 
+    # AMÉLIORATION : numéro de la tournée de chaque client
+    tournee_de = {cl: r for r, t in enumerate(solution) for cl in t}
+
     for (r1, p1) in tous_clients:
         t1 = solution[r1]
         c = t1[p1]
         a, b = autour(t1, p1)
+        # AMÉLIORATION : on ne tente que les tournées qui passent près de c
+        if proches:
+            a_tester = sorted({tournee_de[v] for v in proches[c] if v in tournee_de})
+        else:
+            a_tester = range(len(solution))
         # gain obtenu en retirant c :  a -> c -> b  devient  a -> b
         delta_retrait = dist[a][b] - dist[a][c] - dist[c][b]
 
         # ----- RELOCATE : on retire c et on le remet entre x et y -----
-        for r2 in range(len(solution) + 1):          # +1 = ouvrir un nouveau camion
+        for r2 in [*a_tester, len(solution)]:        # + len(solution) = ouvrir un nouveau camion
             if r2 == len(solution):
                 # nouveau camion : 0 -> c -> 0 (AJOUT interface : seulement s'il en reste un)
                 if len(t1) > 1 and (k_max is None or len(solution) < k_max):
@@ -230,7 +243,9 @@ def voisinage(solution, taille_echantillon=None):
                 yield delta_retrait + delta_insert, ("relocate", r1, p1, r2, p2)
 
         # ----- SWAP : on échange c avec un client d d'une autre tournée -----
-        for r2 in range(r1 + 1, len(solution)):
+        for r2 in a_tester:
+            if r2 <= r1:
+                continue
             t2 = solution[r2]
             for p2 in range(len(t2)):
                 d = t2[p2]
