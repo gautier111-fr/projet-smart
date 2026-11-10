@@ -25,6 +25,17 @@ from collections import deque
 # on le laisse en OPTION pour le comparer sur les instances VRPLIB.
 UTILISER_2OPT = False
 
+# AJOUT interface : réglages remplis par l'interface (voir adaptateur.py).
+# Avec ces valeurs par défaut, le code fonctionne exactement comme avant.
+depart = 0.0      # heure de départ des camions (360 = 6h00 pour les instances de Lorraine)
+k_max = None      # nombre de camions disponibles (None = illimité)
+
+
+def trajet(i, j, heure):
+    """AJOUT interface : durée du trajet i -> j en partant à 'heure'.
+    Par défaut c'est la distance ; l'interface la remplace quand le trafic est activé."""
+    return dist[i][j]
+
 
 # =============================================================================
 # 1. DONNÉES DE L'INSTANCE
@@ -83,17 +94,19 @@ def tournee_valide(tournee):
         return False
 
     # 2) Fenêtres de temps : on simule le trajet du camion
-    t = 0.0          # heure de départ du dépôt
+    t = depart       # heure de départ du dépôt (AJOUT interface : 0 avant)
     prec = 0         # on part du dépôt
     for i in tournee:
-        t = t + s[prec] + dist[prec][i]   # arrivée chez i
+        t = t + s[prec]                   # fin du service chez le précédent
+        t = t + trajet(prec, i, t)        # arrivée chez i (AJOUT interface : trajet() gère le trafic)
         t = max(t, tw[i][0])              # attente si on arrive trop tôt
         if t > tw[i][1]:                  # trop tard => interdit
             return False
         prec = i
 
     # 3) Retour au dépôt avant sa fermeture
-    t = t + s[prec] + dist[prec][0]
+    t = t + s[prec]
+    t = t + trajet(prec, 0, t)
     return t <= tw[0][1]
 
 
@@ -197,7 +210,8 @@ def voisinage(solution, taille_echantillon=None):
         # ----- RELOCATE : on retire c et on le remet entre x et y -----
         for r2 in range(len(solution) + 1):          # +1 = ouvrir un nouveau camion
             if r2 == len(solution):
-                if len(t1) > 1:                      # nouveau camion : 0 -> c -> 0
+                # nouveau camion : 0 -> c -> 0 (AJOUT interface : seulement s'il en reste un)
+                if len(t1) > 1 and (k_max is None or len(solution) < k_max):
                     yield delta_retrait + 2 * dist[0][c], ("relocate", r1, p1, r2, 0)
                 continue
             t2 = solution[r2]
@@ -298,7 +312,7 @@ def appliquer_mouvement(solution, mouvement):
 # =============================================================================
 
 def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
-                    taille_echantillon=None, heure_fin=None):
+                    taille_echantillon=None, heure_fin=None, suivi=None):
     """
     1. On part de la solution GRASP
     2. On prend le meilleur voisin dont le mouvement n'est pas tabou
@@ -307,6 +321,8 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
     4. On s'arrête après iter_max itérations SANS amélioration
     Différence avec le workshop : on rend tabou un MOUVEMENT (le client déplacé)
     au lieu de la solution entière -> plus efficace pour le VRP.
+    AJOUT interface : suivi(iteration, cout) est appelé à chaque nouveau record
+                      (courbe de convergence de l'interface).
     """
     liste_tabou = deque(maxlen=taille_tabou)
 
@@ -316,10 +332,12 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
     cout_meilleure_globale = cout_courant
 
     nb_iter = 0
+    iteration = 0                    # AJOUT interface (pour suivi)
     while nb_iter < iter_max:
         # arrêt forcé si le temps total est dépassé (grandes instances)
         if heure_fin and time.time() > heure_fin:
             break
+        iteration += 1
         meilleur_mvt, delta_meilleur = None, float("inf")
 
         for delta, mvt in voisinage(solution_courante, taille_echantillon):
@@ -348,6 +366,8 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
             meilleure_globale = solution_courante
             cout_meilleure_globale = cout_courant
             nb_iter = 0
+            if suivi:                    # AJOUT interface : courbe de convergence
+                suivi(iteration, cout_meilleure_globale)
         else:
             nb_iter += 1
 
@@ -359,7 +379,7 @@ def recherche_tabou(solution_initiale, taille_tabou=10, iter_max=50,
 # =============================================================================
 
 def grasp_tabou(nb_starts=10, alpha=0.3, taille_tabou=10, iter_max=50,
-                taille_echantillon=None, temps_max=None, verbose=True):
+                taille_echantillon=None, temps_max=None, verbose=True, suivi=None):
     """Répète (construction GRASP -> recherche tabou) et garde la meilleure."""
     meilleure, cout_meilleure = None, float("inf")
     debut = time.time()
@@ -373,6 +393,8 @@ def grasp_tabou(nb_starts=10, alpha=0.3, taille_tabou=10, iter_max=50,
             print(f"start {k + 1:3d} : coût = {c:9.1f}  ({len(sol)} camions)")
         if c < cout_meilleure:
             meilleure, cout_meilleure = sol, c
+            if suivi:                    # AJOUT interface : courbe de convergence
+                suivi(k + 1, c)
         if temps_max and time.time() - debut > temps_max:
             break
 
