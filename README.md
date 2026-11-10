@@ -70,7 +70,7 @@ projet-smart/
 │   ├── graphiques.py         cartes, planning, suivi 3D / 2D, convergence
 │   └── etude.py              l'onglet « Étude expérimentale »
 │
-├── instances/                les instances (.vrp) et leurs meilleures solutions connues (.sol)
+├── instances/                toutes les instances (.vrp) et leurs meilleures solutions connues (.sol)
 ├── resultats/                les CSV et graphiques produits
 └── images/                   les captures de l'interface (notebook, partie 10)
 ```

@@ -5,12 +5,11 @@ Une instance est un dictionnaire (voir construire_instance). Le sommet 0 est le 
 les clients vont de 1 à n. Tout le projet utilise la même matrice instance["distance"],
 calculée avec l'arrondi des solutions de référence : sinon le gap serait faux.
 
-Les instances de instances/GENERE ont été créées une fois (clients uniformes ou en grappes,
+Les instances « GEN- » de instances/ ont été créées une fois (clients uniformes ou en grappes,
 dépôt au centre ou dans un coin, fenêtres serrées ou aucune) ; l'optimum de la plus petite
 a été calculé par la PLNE.
 """
 
-import glob
 import os
 
 import numpy as np
@@ -143,22 +142,30 @@ def charger_instance(chemin):
     )
 
 
+# Les 15 fichiers de instances/ montrés dans l'interface ; avec les 5 instances de Lorraine,
+# cela fait 20 scénarios variés (taille, répartition des clients, fenêtres de temps).
+# Les autres fichiers de instances/ servent au benchmark de l'équipe (benchmark_vrplib.py).
+INSTANCES_INTERFACE = [
+    "C101", "C201", "R101", "R201", "RC101", "RC201", "R1_10_1",          # VRPTW (Solomon, Homberger)
+    "X-n101-k25", "X-n200-k36", "X-n502-k39", "X-n1001-k43", "Leuven1",  # CVRP (Uchoa, Arnold)
+    "GEN-uniforme-centre-serrees-n8-g1", "GEN-clusters-centre-serrees-n200-g1",
+    "GEN-clusters-coin-aucune-n2000-g1",                                 # générées par nous
+]
+
+
 def lister_instances():
-    """Parcourt les sous-dossiers de instances/ (CVRP, VRPTW, GENERE) et lit juste l'en-tête
-    de chaque fichier. Les fichiers posés directement dans instances/ servent au
-    benchmark_vrplib.py de l'équipe : on ne les compte pas deux fois."""
+    """Les 20 instances de l'interface. Pour chaque fichier, on ne lit que l'en-tête (rapide)."""
     liste = []
-    for chemin in glob.glob(os.path.join(DOSSIER_INSTANCES, "*", "*.vrp")):
+    for nom in INSTANCES_INTERFACE:
+        chemin = os.path.join(DOSSIER_INSTANCES, nom + ".vrp")
         entete = {}
-        with open(chemin, encoding="utf-8", errors="replace") as f:
+        with open(chemin, encoding="utf-8") as f:
             for ligne in f:
-                if "SECTION" in ligne:
+                if "SECTION" in ligne:                  # fin de l'en-tête
                     break
-                if ":" in ligne:
-                    cle, valeur = ligne.split(":", 1)
-                    entete[cle.strip()] = valeur.strip()
-        liste.append({"nom": entete.get("NAME", os.path.basename(chemin)[:-4]),
-                      "type": "CVRPTW" if "TW" in entete.get("TYPE", "") else "CVRP",
+                cle, _, valeur = ligne.partition(":")
+                entete[cle.strip()] = valeur.strip()
+        liste.append({"nom": nom, "type": "CVRPTW" if "TW" in entete["TYPE"] else "CVRP",
                       "n": int(entete["DIMENSION"]) - 1, "chemin": chemin})
     from probleme.lorraine import lister_instances_lorraine
     liste += lister_instances_lorraine()                # villes de Metz / Nancy

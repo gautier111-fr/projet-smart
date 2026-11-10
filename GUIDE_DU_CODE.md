@@ -63,10 +63,10 @@ Les fonctions, partie par partie :
    déduit la famille du nom (« VRPTW R (aléatoires), fenêtres serrées »…).
 3. **Lire** : `charger_instance(chemin)` lit un fichier `.vrp` avec `vrplib`, et son `.sol`
    s'il existe (la meilleure solution connue). `lister_instances()` donne les 20 instances
-   de l'interface : les sous-dossiers `instances/CVRP`, `VRPTW`, `GENERE` et les 5 de Lorraine.
+   de l'interface : les 15 fichiers de la liste `INSTANCES_INTERFACE` et les 5 de Lorraine.
 4. **L'exemple du livrable 1** : `exemple_livrable1()` (6 clients, optimum 33,9).
 
-Les 3 instances de `instances/GENERE` ont été générées une fois (clients uniformes ou en
+Les 3 instances « GEN- » de `instances/` ont été générées une fois (clients uniformes ou en
 grappes, dépôt au centre ou dans un coin, fenêtres serrées ou aucune) ; l'optimum de la
 plus petite a été calculé par la PLNE et enregistré dans son `.sol`.
 
@@ -237,8 +237,9 @@ Quatre expériences, chacune avec un CSV et un graphique dans `resultats/` :
 3. **Taille** : instances X de 100 à 1 000 clients, gap et temps d'une construction ;
 4. **Sensibilité** : `alpha` puis la taille de la liste tabou.
 
-Les fichiers du dossier `instances/` (sans sous-dossier) servent à ces deux scripts ;
-ceux des sous-dossiers servent à l'interface.
+Toutes les instances sont dans le dossier `instances/` (un seul exemplaire de chaque
+fichier) : les scripts de l'équipe en utilisent une partie, l'interface une autre
+(`INSTANCES_INTERFACE`).
 
 ---
 
