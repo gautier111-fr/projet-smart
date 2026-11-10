@@ -97,10 +97,14 @@ suivi.update_layout(showlegend=ev["nb_vehicules"] <= 20)
 # laissent une traînée et on croit en voir plusieurs).
 suivi.layout.updatemenus[0].buttons[0].args[1].update(frame=dict(duration=100), transition=dict(duration=0))
 suivi.layout.sliders[0].transition.duration = 0
-st.plotly_chart(suivi, width="stretch")
-st.caption("Cliquez sur ▶ (sous la carte) pour voir les camions avancer au fil de la journée. "
+onglet_2d, onglet_3d = st.tabs(["Suivi 2D", "Suivi 3D (bonus)"])
+onglet_2d.plotly_chart(suivi, width="stretch")
+onglet_2d.caption("Cliquez sur ▶ (sous la carte) pour voir les camions avancer au fil de la journée. "
            "Hors Lorraine, le temps des instances n'est pas une heure : il est donné en % de la "
            "journée (0 % = ouverture du dépôt, 100 % = fermeture).")
+with onglet_3d:   # BONUS facultatif (affichage seulement) : tout son code est à part, dans bonus_3d/
+    from bonus_3d.suivi_3d import afficher_suivi_3d
+    afficher_suivi_3d(inst, ev)
 
 # 5. Le détail de chaque tournée
 nom_lieu = inst.get("villes") or ["Dépôt"] + [f"Client {i}" for i in range(1, inst["n"] + 1)]

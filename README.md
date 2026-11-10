@@ -71,6 +71,7 @@ projet-smart/
 │
 ├── instances/                toutes les instances (.vrp) et leurs meilleures solutions connues (.sol)
 ├── resultats/                les CSV et graphiques produits
+├── bonus_3d/                 BONUS facultatif : l'onglet « Suivi 3D » (affichage seulement, hors programme)
 └── images/                   la capture de l'interface (notebook, partie 10)
 ```
 

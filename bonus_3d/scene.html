@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<!-- BONUS (hors programme) : mise en scène 3D des tournées. Aucun calcul de tournée ici. -->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1026;
+               font-family: "Segoe UI", system-ui, sans-serif; color: #f2f5f7; }
+  #scene { position: absolute; inset: 0; }
+  .panneau { position: absolute; background: rgba(14, 20, 28, .74); border-radius: 12px;
+             backdrop-filter: blur(6px); box-shadow: 0 4px 18px rgba(0, 0, 0, .35); font-size: 13px; }
+  #horloge { top: 12px; left: 12px; padding: 10px 14px; width: 230px; }
+  #titre { font-size: 12px; opacity: .75; }
+  #heure { font-size: 30px; font-weight: 700; margin: 2px 0 6px; }
+  .barre { height: 6px; background: rgba(255, 255, 255, .15); border-radius: 3px; overflow: hidden; }
+  .barre > div { height: 100%; width: 0; background: #ffd23f; }
+  #compteur { margin-top: 8px; }
+  #trafic { margin-top: 8px; display: none; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+  #commandes { top: 12px; right: 12px; padding: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+               max-width: 470px; justify-content: flex-end; }
+  button, select { background: rgba(255, 255, 255, .1); color: #f2f5f7; border: 1px solid rgba(255, 255, 255, .2);
+                   border-radius: 7px; padding: 5px 9px; font-size: 13px; cursor: pointer; }
+  button:hover, select:hover { background: rgba(255, 255, 255, .2); }
+  button.actif { background: #ffd23f; color: #111; border-color: #ffd23f; }
+  select option { background: #1b2430; }
+  #camions { top: 150px; left: 12px; width: 230px; bottom: 70px; overflow-y: auto; padding: 6px; }
+  .camion { padding: 6px 8px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; }
+  .camion:hover, .camion.suivi { background: rgba(255, 255, 255, .12); }
+  .camion .ligne1 { display: flex; justify-content: space-between; font-weight: 600; }
+  .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .camion .etat { opacity: .8; font-size: 12px; margin: 2px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .camion .barre > div { background: currentColor; }
+  #journal { right: 12px; bottom: 70px; width: 300px; padding: 8px 10px; font-size: 12px; line-height: 1.5; }
+  #journal b { font-size: 13px; }
+  #frise { left: 12px; right: 12px; bottom: 12px; padding: 10px 14px; display: flex; gap: 12px; align-items: center; }
+  #frise input { flex: 1; accent-color: #ffd23f; }
+  #infobulle { position: absolute; pointer-events: none; display: none; background: rgba(255, 255, 255, .95);
+               color: #111; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.45;
+               box-shadow: 0 3px 12px rgba(0, 0, 0, .3); max-width: 260px; }
+  #aide { position: absolute; left: 50%; transform: translateX(-50%); bottom: 64px; font-size: 11px; opacity: .7;
+          text-shadow: 0 1px 2px #000; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="horloge" class="panneau">
+  <div id="titre"></div>
+  <div id="heure"></div>
+  <div class="barre"><div id="barreJour"></div></div>
+  <div id="compteur"></div>
+  <div id="trafic"></div>
+</div>
+<div id="commandes" class="panneau">
+  <button id="lecture" title="Lecture / pause">⏸</button>
+  <span id="vitesses"></span>
+  <select id="vue" title="Caméra"></select>
+  <button id="conducteur" title="Vue depuis la cabine du camion suivi">🎥 Cabine</button>
+  <button id="tournees" class="actif" title="Afficher le trajet de chaque camion">Tournées</button>
+</div>
+<div id="camions" class="panneau"></div>
+<div id="journal" class="panneau"></div>
+<div id="frise" class="panneau"><span id="debutFrise"></span><input id="temps" type="range" min="0" max="1000" value="0"><span id="finFrise"></span></div>
+<div id="aide">Clic gauche : tourner · clic droit : déplacer · molette : zoom · survol d'un bâtiment : détails</div>
+<div id="infobulle"></div>
+
+<script>/*THREE*/</script>
+<script>
+"use strict";
+const D = __DONNEES__;
+
+// =====================================================================
+// 1. Outils
+// =====================================================================
+function alea(graine) {                       // hasard reproductible : la ville est toujours la même
+  return function () {
+    graine |= 0; graine = graine + 0x6D2B79F5 | 0;
+    let t = Math.imul(graine ^ graine >>> 15, 1 | graine);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rnd = alea(2026);
+const entre = (a, b) => a + (b - a) * rnd();
+const borne = (v, a, b) => Math.max(a, Math.min(b, v));
+const deux = v => String(Math.floor(v)).padStart(2, "0");
+
+function heureTexte(t) {                      // même affichage que le suivi 2D
+  if (D.lorraine) return `${Math.floor(t / 60)}h${deux(t % 60)}`;
+  return `${(100 * (t - D.ouverture) / (D.fermeture - D.ouverture)).toFixed(1)} %`;
+}
+function heureLumiere(t) {                    // heure « solaire » pour le ciel et l'éclairage
+  if (D.lorraine) return t / 60;
+  return 7 + 12 * borne((t - D.ouverture) / (D.fermeture - D.ouverture), 0, 1);
+}
+function coefTrafic(t) {
+  if (!D.trafic) return { coef: 1, nom: "" };
+  const p = 100 * t / D.horizon;
+  for (const tr of D.trafic) if (tr.debut <= p && p < tr.fin) return { coef: tr.coef, nom: tr.tranche };
+  return { coef: 1, nom: "Circulation fluide" };
+}
+function toile(l, h, dessin) {                // texture dessinée sur un canvas
+  const c = document.createElement("canvas"); c.width = l; c.height = h;
+  dessin(c.getContext("2d"), l, h);
+  const t = new THREE.CanvasTexture(c);
+  t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  return t;
+}
+function etiquette(texte, fond, couleur, taille) {   // texte toujours face à la caméra
+  const t = toile(512, 128, (g, l, h) => {
+    g.font = "bold 54px Segoe UI, sans-serif";
+    const w = Math.min(l - 8, g.measureText(texte).width + 44);
+    g.fillStyle = fond; g.beginPath();
+    g.roundRect ? g.roundRect((l - w) / 2, 18, w, 92, 40) : g.rect((l - w) / 2, 18, w, 92);
+    g.fill();
+    g.fillStyle = couleur; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(texte, l / 2, 66);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true, sizeAttenuation: false }));
+  s.scale.set(0.16 * taille, 0.04 * taille, 1); s.renderOrder = 10;
+  return s;
+}
+
+// =====================================================================
+// 2. Données : passages de chaque camion (même principe que le suivi 2D)
+// =====================================================================
+const L = D.lieux, NB = L.length;
+let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+for (const p of L) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z); }
+const TAILLE = Math.max(maxX - minX, maxZ - minZ) + 160;
+const T0 = Math.min(...D.camions.map(c => c.depart)), T1 = Math.max(...D.camions.map(c => c.retour));
+const SIMPLE = D.camions.length > 40;        // beaucoup de camions : modèles allégés
+const OMBRES = NB <= 400;
+
+// Le parking du dépôt : une place par camion
+const depot = L[0];
+const cotesParking = Math.ceil(Math.sqrt(D.camions.length));
+const LARGEUR_ROUTE = 3.4;
+
+// Infos par client (quel camion, quand)
+const infoClient = new Array(NB).fill(null);
+D.camions.forEach((c, k) => c.arrets.forEach(a => { infoClient[a.client] = { camion: k, ...a }; }));
+
+// Tronçons de route : chaque trajet d'une tournée
+const troncons = [];
+D.camions.forEach((c, k) => {
+  const chemin = [0, ...c.arrets.map(a => a.client), 0];
+  for (let i = 0; i + 1 < chemin.length; i++) troncons.push({ a: chemin[i], b: chemin[i + 1], camion: k });
+});
+
+// Direction « libre » autour d'un lieu (le plus grand angle sans route) : on y pose le bâtiment
+function directionLibre(i) {
+  const angles = [];
+  for (const t of troncons) {
+    const j = t.a === i ? t.b : t.b === i ? t.a : -1;
+    if (j >= 0 && j !== i) angles.push(Math.atan2(L[j].z - L[i].z, L[j].x - L[i].x));
+  }
+  if (!angles.length) return rnd() * Math.PI * 2;
+  angles.sort((a, b) => a - b);
+  let meilleur = 0, milieu = angles[0] + Math.PI;
+  for (let k = 0; k < angles.length; k++) {
+    const a = angles[k], b = k + 1 < angles.length ? angles[k + 1] : angles[0] + 2 * Math.PI;
+    if (b - a > meilleur) { meilleur = b - a; milieu = (a + b) / 2; }
+  }
+  return milieu;
+}
+
+// =====================================================================
+// 3. Moteur 3D : rendu, caméra, lumières
+// =====================================================================
+const conteneur = document.getElementById("scene");
+const rendu = new THREE.WebGLRenderer({ antialias: true });
+rendu.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+rendu.outputEncoding = THREE.sRGBEncoding;
+rendu.shadowMap.enabled = OMBRES;
+rendu.shadowMap.type = THREE.PCFSoftShadowMap;
+conteneur.appendChild(rendu.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.3, TAILLE * 14);
+const controles = new THREE.OrbitControls(camera, rendu.domElement);
+controles.enableDamping = true;
+controles.maxPolarAngle = Math.PI * 0.47;
+controles.minDistance = 6;
+controles.maxDistance = TAILLE * 3;
+
+function redimensionner() {
+  const l = conteneur.clientWidth || window.innerWidth, h = conteneur.clientHeight || window.innerHeight;
+  rendu.setSize(l, h); camera.aspect = l / h; camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", redimensionner);
+new ResizeObserver(redimensionner).observe(conteneur);
+redimensionner();
+
+const ciel = new THREE.HemisphereLight(0xcfe6ff, 0x55673a, 0.55);
+scene.add(ciel);
+const soleil = new THREE.DirectionalLight(0xfff1dc, 1.2);
+soleil.castShadow = OMBRES;
+soleil.shadow.mapSize.set(4096, 4096);
+Object.assign(soleil.shadow.camera, { left: -TAILLE / 2, right: TAILLE / 2, top: TAILLE / 2, bottom: -TAILLE / 2, near: 1, far: TAILLE * 4 });
+soleil.shadow.bias = -0.0004;
+scene.add(soleil, soleil.target);
+const lune = new THREE.DirectionalLight(0x8fa8ff, 0.0);
+lune.position.set(TAILLE, TAILLE, -TAILLE);
+scene.add(lune);
+scene.fog = new THREE.Fog(0xa9cdea, TAILLE * 0.9, TAILLE * 3.2);
+
+// =====================================================================
+// 4. Le sol, les routes
+// =====================================================================
+const texHerbe = toile(256, 256, (g, l, h) => {
+  g.fillStyle = "#6d8f4a"; g.fillRect(0, 0, l, h);
+  for (let i = 0; i < 5000; i++) {
+    const v = rnd();
+    g.fillStyle = v < .5 ? "rgba(52,84,34,.35)" : "rgba(150,170,90,.25)";
+    g.fillRect(rnd() * l, rnd() * h, 2, 2);
+  }
+});
+texHerbe.wrapS = texHerbe.wrapT = THREE.RepeatWrapping;
+texHerbe.repeat.set(TAILLE * 4 / 30, TAILLE * 4 / 30);
+const sol = new THREE.Mesh(new THREE.PlaneGeometry(TAILLE * 4, TAILLE * 4),
+  new THREE.MeshStandardMaterial({ map: texHerbe, roughness: 1 }));
+sol.rotation.x = -Math.PI / 2;
+sol.receiveShadow = OMBRES;
+scene.add(sol);
+
+// Ruban (bande plate) le long de segments, en une seule géométrie
+function ruban(segments, largeur, y, couleurs) {
+  const pos = [], uv = [], col = [], idx = [];
+  segments.forEach((s, k) => {
+    const dx = s.x2 - s.x1, dz = s.z2 - s.z1, lg = Math.hypot(dx, dz) || 1e-6;
+    const ux = dx / lg, uz = dz / lg, nx = -uz * largeur / 2, nz = ux * largeur / 2;
+    const e = largeur / 2, yy = y + (k % 7) * 0.003;
+    const ax = s.x1 - ux * e, az = s.z1 - uz * e, bx = s.x2 + ux * e, bz = s.z2 + uz * e;
+    const base = pos.length / 3;
+    pos.push(ax - nx, yy, az - nz, ax + nx, yy, az + nz, bx - nx, yy, bz - nz, bx + nx, yy, bz + nz);
+    const v = (lg + 2 * e) / 8;
+    uv.push(0, 0, 1, 0, 0, v, 1, v);
+    if (couleurs) { const c = couleurs[k]; for (let i = 0; i < 4; i++) col.push(c.r, c.g, c.b); }
+    idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  if (couleurs) g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+
+const texRoute = toile(64, 256, (g, l, h) => {
+  g.fillStyle = "#3a3e44"; g.fillRect(0, 0, l, h);
+  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(${rnd() < .5 ? 20 : 90},${rnd() < .5 ? 20 : 90},${rnd() < .5 ? 25 : 95},.35)`; g.fillRect(rnd() * l, rnd() * h, 1.5, 1.5); }
+  g.fillStyle = "#d9d9d9"; g.fillRect(3, 0, 3, h); g.fillRect(l - 6, 0, 3, h);   // bords
+  g.fillStyle = "#f2f2f2"; g.fillRect(l / 2 - 1.5, 0, 3, h * 0.55);            // ligne pointillée
+});
+texRoute.wrapS = THREE.ClampToEdgeWrapping; texRoute.wrapT = THREE.RepeatWrapping;
+const segRoutes = troncons.map(t => ({ x1: L[t.a].x, z1: L[t.a].z, x2: L[t.b].x, z2: L[t.b].z }));
+const matRoute = new THREE.MeshStandardMaterial({ map: texRoute, roughness: .9, polygonOffset: true, polygonOffsetFactor: -1 });
+const routes = new THREE.Mesh(ruban(segRoutes, LARGEUR_ROUTE, 0.04), matRoute);
+routes.receiveShadow = OMBRES;
+scene.add(routes);
+
+// Carrefours : un disque d'asphalte à chaque lieu
+const carrefours = new THREE.InstancedMesh(new THREE.CylinderGeometry(LARGEUR_ROUTE * 0.8, LARGEUR_ROUTE * 0.8, 0.06, 20),
+  new THREE.MeshStandardMaterial({ color: 0x3a3e44, roughness: .9 }), NB);
+const m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), v3 = new THREE.Vector3(), e3 = new THREE.Vector3();
+const HAUT = new THREE.Vector3(0, 1, 0);
+function placer(mesh, i, x, y, z, angle, sx, sy, sz) {
+  q4.setFromAxisAngle(HAUT, angle || 0);
+  mesh.setMatrixAt(i, m4.compose(v3.set(x, y, z), q4, e3.set(sx, sy, sz)));
+}
+L.forEach((p, i) => placer(carrefours, i, p.x, 0.05, p.z, 0, 1, 1, 1));
+carrefours.receiveShadow = OMBRES;
+scene.add(carrefours);
+
+// Le trajet de chaque camion, en couleur au centre de la route
+const couleursCamions = D.camions.map(c => new THREE.Color(c.couleur));
+const traces = new THREE.Mesh(ruban(segRoutes, 0.7, 0.09, troncons.map(t => couleursCamions[t.camion])),
+  new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .85, polygonOffset: true, polygonOffsetFactor: -2 }));
+scene.add(traces);
+document.getElementById("tournees").onclick = e => {
+  traces.visible = !traces.visible; e.target.classList.toggle("actif", traces.visible);
+};
+
+// =====================================================================
+// 5. Les bâtiments : textures de façades (fenêtres qui s'allument la nuit)
+// =====================================================================
+function facades(etages, colonnes) {
+  const l = 128, h = 32 * etages, cases = [];
+  for (let e = 0; e < etages; e++) for (let c = 0; c < colonnes; c++) cases.push([c, e, rnd() < .35]);
+  const dessinerCase = (g, c, e) => {
+    const lc = l / colonnes, x = c * lc + lc * .22, y = e * 32 + 8;
+    g.fillRect(x, y, lc * .56, 16);
+  };
+  const jour = toile(l, h, g => {
+    g.fillStyle = "#ececec"; g.fillRect(0, 0, l, h);
+    g.fillStyle = "#2b3644"; cases.forEach(([c, e]) => dessinerCase(g, c, e));
+    g.fillStyle = "rgba(255,255,255,.18)"; cases.forEach(([c, e]) => { const lc = l / colonnes; g.fillRect(c * lc + lc * .22, e * 32 + 8, lc * .2, 16); });
+  });
+  const nuit = toile(l, h, g => {
+    g.fillStyle = "#000"; g.fillRect(0, 0, l, h);
+    g.fillStyle = "#ffcf7a"; cases.forEach(([c, e, allume]) => allume && dessinerCase(g, c, e));
+  });
+  return new THREE.MeshStandardMaterial({ map: jour, emissiveMap: nuit, emissive: 0xffd08a, emissiveIntensity: 0, roughness: .8 });
+}
+// Boîte dont le dessus prend la couleur du mur (pas de fenêtres sur le toit)
+function boite() {
+  const g = new THREE.BoxGeometry(1, 1, 1); g.translate(0, .5, 0);
+  const uv = g.attributes.uv;
+  for (let i = 8; i < 16; i++) uv.setXY(i, .02, .99);
+  return g;
+}
+const materiauxFenetres = [];
+function famille(etages, colonnes, nombre) {
+  const mat = facades(etages, colonnes); materiauxFenetres.push(mat);
+  const m = new THREE.InstancedMesh(boite(), mat, Math.max(nombre, 1));
+  m.castShadow = m.receiveShadow = OMBRES; m.count = 0;
+  scene.add(m);
+  return m;
+}
+function ajouter(mesh, x, y, z, angle, sx, sy, sz, couleur) {
+  const i = mesh.count++;
+  placer(mesh, i, x, y, z, angle, sx, sy, sz);
+  if (couleur) mesh.setColorAt(i, couleur);
+  return i;
+}
+const teintesMurs = ["#f3e9d8", "#e7d3b5", "#d9c3a5", "#f0f0f0", "#cfd8dc", "#e8c9b0", "#d7ccc8", "#f5e6c8"].map(c => new THREE.Color(c));
+const teintesBureaux = ["#b0bec5", "#90a4ae", "#cfd8dc", "#a7b6c2", "#c5cae9", "#d6d6d6"].map(c => new THREE.Color(c));
+const teintesToits = ["#a0522d", "#8d4b32", "#6d6d6d", "#7b3f2a", "#5f6a6a"].map(c => new THREE.Color(c));
+
+// --- Les commerces des clients (un par client, posé à côté de la route) ---
+const commerces = famille(2, 3, NB);
+const toits = new THREE.InstancedMesh(new THREE.ConeGeometry(.75, 1, 4).rotateY(Math.PI / 4).translate(0, .5, 0),
+  new THREE.MeshStandardMaterial({ roughness: .85, flatShading: true }), NB);
+toits.castShadow = OMBRES; toits.count = 0; scene.add(toits);
+const terrains = new THREE.InstancedMesh(new THREE.BoxGeometry(1, .08, 1), new THREE.MeshStandardMaterial({ color: 0xb9b5ab, roughness: 1 }), NB);
+terrains.receiveShadow = OMBRES; terrains.count = 0; scene.add(terrains);
+const portes = new THREE.Vector3();
+const posBatiment = new Array(NB).fill(null);      // pour les colis et l'infobulle
+const instanceVersClient = [];
+for (let i = 1; i < NB; i++) {
+  const a = directionLibre(i), r = LARGEUR_ROUTE / 2 + 5.2;
+  const x = L[i].x + Math.cos(a) * r, z = L[i].z + Math.sin(a) * r;
+  const larg = entre(6, 8), prof = entre(5.5, 7), haut = entre(4.5, 7.5);
+  const angle = -a + Math.PI / 2;                  // la façade regarde la route
+  placer(terrains, terrains.count++, x, 0.04, z, angle, larg + 3, 1, prof + 3);
+  const k = ajouter(commerces, x, 0, z, angle, larg, haut, prof, teintesMurs[i % teintesMurs.length]);
+  instanceVersClient[k] = i;
+  const t = toits.count++;
+  placer(toits, t, x, haut, z, angle, larg * 1.05, entre(2, 3.2), prof * 1.05);
+  toits.setColorAt(t, teintesToits[i % teintesToits.length]);
+  posBatiment[i] = { x, z, haut, porteX: L[i].x + Math.cos(a) * (r - prof / 2), porteZ: L[i].z + Math.sin(a) * (r - prof / 2) };
+}
+
+// --- Le dépôt : un grand entrepôt avec quais, parking et enseigne ---
+const aDepot = directionLibre(0);
+const tailleParking = Math.max(24, cotesParking * 8 + 10);
+const centreParking = { x: depot.x, z: depot.z };
+const parking = new THREE.Mesh(new THREE.BoxGeometry(tailleParking, .1, tailleParking),
+  new THREE.MeshStandardMaterial({ map: toile(128, 128, (g, l, h) => {
+    g.fillStyle = "#4a4f55"; g.fillRect(0, 0, l, h); g.strokeStyle = "#e6e6e6"; g.lineWidth = 2;
+    for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * l / 8, 0); g.lineTo(i * l / 8, h * .35); g.stroke(); g.beginPath(); g.moveTo(i * l / 8, h * .65); g.lineTo(i * l / 8, h); g.stroke(); }
+  }), roughness: .95 }));
+parking.position.set(depot.x, .05, depot.z); parking.rotation.y = -aDepot;
+parking.receiveShadow = OMBRES; scene.add(parking);
+const entrepot = new THREE.Group();
+const lgE = Math.max(34, tailleParking * .9), prE = 20, hE = 10;
+const murE = new THREE.Mesh(new THREE.BoxGeometry(lgE, hE, prE), new THREE.MeshStandardMaterial({ map: toile(256, 64, (g, l, h) => {
+  g.fillStyle = "#c9ced3"; g.fillRect(0, 0, l, h);
+  g.fillStyle = "#b5bbc1"; for (let x = 0; x < l; x += 6) g.fillRect(x, 0, 2, h);       // bardage
+  g.fillStyle = "#2f3a45"; for (let k = 0; k < 6; k++) g.fillRect(14 + k * 40, 22, 28, 42);   // quais
+  g.fillStyle = "#f2b134"; for (let k = 0; k < 6; k++) g.fillRect(14 + k * 40, 18, 28, 3);
+}), roughness: .7 }));
+murE.position.y = hE / 2; murE.castShadow = murE.receiveShadow = OMBRES;
+// demi-cylindre couché dans la longueur, aplati : toit cintré
+const toitE = new THREE.Mesh(new THREE.CylinderGeometry(prE * .56, prE * .56, lgE + 1, 24, 1, false, 0, Math.PI),
+  new THREE.MeshStandardMaterial({ color: 0x7f8c8d, roughness: .5, metalness: .4, side: THREE.DoubleSide }));
+toitE.rotation.z = Math.PI / 2; toitE.scale.set(.32, 1, 1); toitE.position.y = hE;
+toitE.castShadow = OMBRES;
+entrepot.add(murE, toitE);
+const enseigne = etiquette("🏭 Entrepôt" + (D.lorraine ? " · " + depot.nom : ""), "rgba(30,60,35,.92)", "#fff", 1.25);
+enseigne.position.set(0, hE + 9, 0); entrepot.add(enseigne);
+const dE = tailleParking / 2 + prE / 2 + 2;
+entrepot.position.set(depot.x + Math.cos(aDepot) * dE, 0, depot.z + Math.sin(aDepot) * dE);
+entrepot.rotation.y = -aDepot + Math.PI / 2;
+scene.add(entrepot);
+
+// Places de parking des camions (avant le départ et après le retour)
+function placeParking(k) {
+  const c = k % cotesParking, r = Math.floor(k / cotesParking);
+  const u = (c - (cotesParking - 1) / 2) * 4.2, v = (r - (cotesParking - 1) / 2) * 8;
+  const ca = Math.cos(aDepot), sa = Math.sin(aDepot);
+  return { x: centreParking.x - u * sa + v * ca, z: centreParking.z + u * ca + v * sa };
+}
+
+// --- La ville autour : immeubles, maisons, parcs (là où il n'y a ni route ni commerce) ---
+const PAS_GRILLE = 40, grille = new Map();
+const cle = (x, z) => Math.floor(x / PAS_GRILLE) + "," + Math.floor(z / PAS_GRILLE);
+function inscrire(x, z, obj) { const k = cle(x, z); if (!grille.has(k)) grille.set(k, []); grille.get(k).push(obj); }
+segRoutes.forEach(s => {
+  const lg = Math.hypot(s.x2 - s.x1, s.z2 - s.z1), n = Math.ceil(lg / (PAS_GRILLE / 2)) + 1, vus = new Set();
+  for (let i = 0; i <= n; i++) {
+    const x = s.x1 + (s.x2 - s.x1) * i / n, z = s.z1 + (s.z2 - s.z1) * i / n;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      const k = cle(x + a * PAS_GRILLE, z + b * PAS_GRILLE);
+      if (!vus.has(k)) { vus.add(k); if (!grille.has(k)) grille.set(k, []); grille.get(k).push({ seg: s }); }
+    }
+  }
+});
+posBatiment.forEach(p => p && inscrire(p.x, p.z, { pt: p, r: 9 }));
+L.forEach(p => inscrire(p.x, p.z, { lieu: p }));
+inscrire(entrepot.position.x, entrepot.position.z, { pt: entrepot.position, r: lgE * .75 });
+inscrire(depot.x, depot.z, { pt: depot, r: tailleParking * .8 });
+function distSeg(x, z, s) {
+  const dx = s.x2 - s.x1, dz = s.z2 - s.z1, l2 = dx * dx + dz * dz || 1e-9;
+  const t = borne(((x - s.x1) * dx + (z - s.z1) * dz) / l2, 0, 1);
+  return Math.hypot(x - s.x1 - t * dx, z - s.z1 - t * dz);
+}
+function analyser(x, z) {          // distance à la route la plus proche, place libre ?, distance au lieu le plus proche
+  let route = Infinity, libre = true, lieu = Infinity, angleRoute = 0;
+  const cx = Math.floor(x / PAS_GRILLE), cz = Math.floor(z / PAS_GRILLE);
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+    const liste = grille.get((cx + a) + "," + (cz + b)); if (!liste) continue;
+    for (const o of liste) {
+      if (o.seg) { const d = distSeg(x, z, o.seg); if (d < route) { route = d; angleRoute = Math.atan2(o.seg.z2 - o.seg.z1, o.seg.x2 - o.seg.x1); } }
+      else if (o.pt) { if (Math.hypot(x - o.pt.x, z - o.pt.z) < o.r) libre = false; }
+      else lieu = Math.min(lieu, Math.hypot(x - o.lieu.x, z - o.lieu.z));
+    }
+  }
+  return { route, libre, lieu, angleRoute };
+}
+const PAS = Math.max(11, Math.sqrt((TAILLE * TAILLE) / 9000));
+const candidats = [];
+for (let x = minX - 60; x <= maxX + 60; x += PAS) for (let z = minZ - 60; z <= maxZ + 60; z += PAS)
+  candidats.push([x + entre(-2, 2), z + entre(-2, 2)]);
+const maisons = famille(2, 2, candidats.length), immeubles = famille(6, 4, candidats.length), tours = famille(16, 5, candidats.length);
+const toitsMaisons = new THREE.InstancedMesh(new THREE.ConeGeometry(.75, 1, 4).rotateY(Math.PI / 4).translate(0, .5, 0),
+  new THREE.MeshStandardMaterial({ roughness: .85, flatShading: true }), candidats.length);
+toitsMaisons.castShadow = OMBRES; toitsMaisons.count = 0; scene.add(toitsMaisons);
+const arbres = [], champs = [];
+const cx0 = (minX + maxX) / 2, cz0 = (minZ + maxZ) / 2, rayonVille = Math.max(maxX - minX, maxZ - minZ) / 2 + 1;
+for (const [x, z] of candidats) {
+  const A = analyser(x, z);
+  if (!A.libre || A.route < LARGEUR_ROUTE / 2 + 4.5) continue;
+  const densite = Math.exp(-A.lieu / 45);                       // la ville se concentre autour des lieux
+  const centre = Math.exp(-((Math.hypot(x - cx0, z - cz0) / (rayonVille * .45)) ** 2));
+  const r = rnd();
+  const angle = -A.angleRoute;                                 // alignés sur la route la plus proche
+  if (r < densite * .8 && A.route < 22) {
+    const pres = A.route < 13;
+    if (centre > .55 && rnd() < centre * .5 && NB > 30) {
+      const h = entre(30, 70) * (.6 + centre * .6);
+      ajouter(tours, x, 0, z, angle, entre(8, 11), h, entre(8, 11), teintesBureaux[Math.floor(rnd() * teintesBureaux.length)]);
+    } else if (centre > .25 && rnd() < .55) {
+      ajouter(immeubles, x, 0, z, angle, entre(7, 10), entre(12, 26), entre(7, 10), teintesMurs[Math.floor(rnd() * teintesMurs.length)]);
+    } else if (pres || rnd() < .6) {
+      const h = entre(4, 7), lg = entre(5, 7.5), pr = entre(5, 7);
+      ajouter(maisons, x, 0, z, angle, lg, h, pr, teintesMurs[Math.floor(rnd() * teintesMurs.length)]);
+      const t = toitsMaisons.count++;
+      placer(toitsMaisons, t, x, h, z, angle, lg * 1.08, entre(2, 3.5), pr * 1.08);
+      toitsMaisons.setColorAt(t, teintesToits[Math.floor(rnd() * teintesToits.length)]);
+    }
+  } else if (densite > .35 && rnd() < .35) {                   // petit parc en ville
+    for (let k = 0; k < 3; k++) arbres.push([x + entre(-4, 4), z + entre(-4, 4), entre(.8, 1.4)]);
+  } else if (densite < .15) {                                  // campagne : champs et bosquets
+    const r2 = rnd();
+    if (r2 < .75) champs.push([x, z]);
+    else if (r2 < .85) for (let k = 0; k < 4; k++) arbres.push([x + entre(-5, 5), z + entre(-5, 5), entre(.9, 1.5)]);
+  } else if (rnd() < .12) arbres.push([x, z, entre(.8, 1.3)]);
+}
+for (const p of posBatiment) if (p) for (let k = 0; k < 2; k++) {        // quelques arbres près des commerces
+  const a = rnd() * Math.PI * 2; arbres.push([p.x + Math.cos(a) * 8, p.z + Math.sin(a) * 8, entre(.7, 1.1)]);
+}
+const troncs = new THREE.InstancedMesh(new THREE.CylinderGeometry(.25, .35, 2.2, 6).translate(0, 1.1, 0),
+  new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 1 }), arbres.length || 1);
+const feuillages = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.6, 0).translate(0, 3.6, 0),
+  new THREE.MeshStandardMaterial({ roughness: .9, flatShading: true }), arbres.length || 1);
+const verts = ["#4f7d39", "#3f6b2f", "#5d8c3c", "#6f9a45", "#2f5a2a"].map(c => new THREE.Color(c));
+troncs.count = feuillages.count = 0;
+for (const [x, z, s] of arbres) {
+  const A = analyser(x, z);
+  if (!A.libre || A.route < LARGEUR_ROUTE / 2 + 1.5) continue;
+  placer(troncs, troncs.count++, x, 0, z, 0, s, s, s);
+  const f = feuillages.count++;
+  placer(feuillages, f, x, 0, z, rnd() * 6, s, s * entre(.9, 1.3), s);
+  feuillages.setColorAt(f, verts[Math.floor(rnd() * verts.length)]);
+}
+troncs.castShadow = feuillages.castShadow = OMBRES;
+scene.add(troncs, feuillages);
+// Champs : des sillons, teintés en blé, prairie ou terre labourée
+const texChamp = toile(64, 64, (g, l, h) => {
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, l, h);
+  g.fillStyle = "rgba(0,0,0,.18)"; for (let y = 0; y < h; y += 8) g.fillRect(0, y, l, 3);
+});
+const parcelles = new THREE.InstancedMesh(new THREE.BoxGeometry(1, .1, 1),
+  new THREE.MeshStandardMaterial({ map: texChamp, roughness: 1 }), champs.length || 1);
+const teintesChamps = ["#c9b866", "#b9a85a", "#86a556", "#8f7452", "#9fb866", "#7c9a4e"].map(c => new THREE.Color(c));
+parcelles.count = 0;
+const PAS_CHAMP = PAS * 3;                                     // une couleur par grande parcelle
+for (const [x, z] of champs) {
+  const k = parcelles.count++;
+  placer(parcelles, k, x, .03, z, 0, PAS * 1.01, 1, PAS * 1.01);
+  const n = Math.abs(Math.floor(x / PAS_CHAMP) * 73856093 ^ Math.floor(z / PAS_CHAMP) * 19349663);
+  parcelles.setColorAt(k, teintesChamps[n % teintesChamps.length]);
+}
+parcelles.receiveShadow = OMBRES;
+scene.add(parcelles);
+
+// Nuages
+const nuages = new THREE.Group();
+const matNuage = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: .9, flatShading: true });
+for (let k = 0; k < 14; k++) {
+  const n = new THREE.Group();
+  for (let b = 0; b < 5; b++) {
+    const s = new THREE.Mesh(new THREE.IcosahedronGeometry(entre(6, 11), 0), matNuage);
+    s.position.set(entre(-14, 14), entre(-2, 3), entre(-6, 6)); n.add(s);
+  }
+  n.scale.setScalar(Math.max(1, TAILLE / 400));
+  n.position.set(entre(minX, maxX), TAILLE * entre(.75, .95) + 60, entre(minZ, maxZ));
+  n.userData.v = entre(1.5, 3.5);
+  nuages.add(n);
+}
+scene.add(nuages);
+
+// Noms des villes (Lorraine)
+if (D.lorraine) for (let i = 1; i < NB; i++) {
+  const s = etiquette(L[i].nom, "rgba(255,255,255,.88)", "#1d2a1d", .9);
+  s.position.set(posBatiment[i].x, posBatiment[i].haut + 7, posBatiment[i].z); scene.add(s);
+}
+
+// --- Les repères au-dessus des clients : à livrer (couleur du camion), en cours (jaune), livré (vert) ---
+const reperes = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1.1, 0).scale(1, 1.6, 1),
+  new THREE.MeshStandardMaterial({ roughness: .4, emissive: 0x222222 }), NB);
+const etatClient = new Int8Array(NB).fill(-1);
+for (let i = 0; i < NB; i++) placer(reperes, i, 0, -50, 0, 0, 0, 0, 0);   // cachés tant qu'ils ne sont pas placés
+const JAUNE = new THREE.Color("#ffd23f"), VERT = new THREE.Color("#2ecc71"), GRIS = new THREE.Color("#9e9e9e");
+scene.add(reperes);
+
+// =====================================================================
+// 6. Les camions
+// =====================================================================
+const geoRoue = new THREE.CylinderGeometry(.55, .55, .45, 14).rotateZ(Math.PI / 2);
+const matRoue = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: .8 });
+const matChassis = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: .7 });
+const matVitre = new THREE.MeshStandardMaterial({ color: 0x1d2b3a, roughness: .1, metalness: .6 });
+const matPhare = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3c4, emissiveIntensity: .3 });
+const matFeu = new THREE.MeshStandardMaterial({ color: 0x550000, emissive: 0xff2200, emissiveIntensity: .4 });
+function boiteMesh(l, h, p, mat, x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(l, h, p), mat); m.position.set(x, y, z);
+  m.castShadow = OMBRES; return m;
+}
+function creerCamion(c, k) {
+  const g = new THREE.Group(), roues = [];
+  const couleur = new THREE.Color(c.couleur);
+  if (SIMPLE) {
+    g.add(boiteMesh(2.3, 2.4, 5.6, new THREE.MeshStandardMaterial({ color: couleur, roughness: .5 }), 0, 1.7, -.3));
+    g.add(boiteMesh(2.3, 1.8, 1.4, new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: .4 }), 0, 1.4, 3.1));
+  } else {
+    const logo = toile(256, 128, (gg, l, h) => {
+      gg.fillStyle = c.couleur; gg.fillRect(0, 0, l, h);
+      gg.fillStyle = "rgba(255,255,255,.95)"; gg.font = "bold 46px Segoe UI, sans-serif"; gg.textAlign = "center";
+      gg.fillText("Camion " + c.numero, l / 2, 62); gg.font = "24px Segoe UI, sans-serif"; gg.fillText("Livraisons CesiCDP", l / 2, 100);
+    });
+    const matCaisse = new THREE.MeshStandardMaterial({ color: couleur, roughness: .45 });
+    const matLogo = new THREE.MeshStandardMaterial({ map: logo, roughness: .45 });
+    const caisse = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.9, 4.4), [matLogo, matLogo, matCaisse, matCaisse, matCaisse, matCaisse]);
+    caisse.position.set(0, 2.55, -.9); caisse.castShadow = OMBRES; g.add(caisse);
+    g.add(boiteMesh(2.4, .45, 6.6, matChassis, 0, .95, 0));
+    const cabine = boiteMesh(2.4, 2.1, 1.8, new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: .35, metalness: .1 }), 0, 2.1, 2.3);
+    g.add(cabine);
+    g.add(boiteMesh(2.2, .9, .05, matVitre, 0, 2.55, 3.22));                   // pare-brise
+    g.add(boiteMesh(.05, .8, 1.1, matVitre, 1.21, 2.55, 2.4), boiteMesh(.05, .8, 1.1, matVitre, -1.21, 2.55, 2.4));
+    g.add(boiteMesh(.45, .3, .08, matPhare, .8, 1.35, 3.22), boiteMesh(.45, .3, .08, matPhare, -.8, 1.35, 3.22));
+    g.add(boiteMesh(.35, .25, .08, matFeu, .95, 1.3, -3.13), boiteMesh(.35, .25, .08, matFeu, -.95, 1.3, -3.13));
+  }
+  for (const [x, z] of [[1.15, 2.2], [-1.15, 2.2], [1.15, -1.6], [-1.15, -1.6], [1.15, -2.6], [-1.15, -2.6]]) {
+    if (SIMPLE && Math.abs(z) > 2.5) continue;
+    const r = new THREE.Mesh(geoRoue, matRoue); r.position.set(x, .55, z); r.castShadow = OMBRES; g.add(r); roues.push(r);
+  }
+  if (D.camions.length <= 30) {
+    const n = etiquette(String(c.numero), c.couleur, "#fff", .55); n.position.y = 6.5; g.add(n);
+  }
+  const colis = boiteMesh(.9, .7, .9, new THREE.MeshStandardMaterial({ color: 0xc8a165, roughness: .9 }), 0, 0, 0);
+  colis.visible = false; scene.add(colis);
+  scene.add(g);
+  const P = placeParking(k);
+  return { donnees: c, groupe: g, roues, colis, parking: P, cap: 0, x: P.x, z: P.z, passages: construirePassages(c, P) };
+}
+function construirePassages(c, P) {        // lieu et heure de chaque passage (comme le suivi 2D)
+  const p = [{ t: c.depart, x: P.x, z: P.z, lieu: 0 }];
+  for (const a of c.arrets) {
+    const l = L[a.client];
+    p.push({ t: a.arrivee, x: l.x, z: l.z, lieu: a.client, arret: a }, { t: a.fin, x: l.x, z: l.z, lieu: a.client, arret: a });
+  }
+  p.push({ t: c.retour, x: P.x, z: P.z, lieu: 0 });
+  return p;
+}
+const capParking = Math.atan2(Math.cos(aDepot), Math.sin(aDepot));
+const camions = D.camions.map(creerCamion);
+
+// État d'un camion à l'instant t : position, cap, ce qu'il fait
+function etatCamion(cm, t) {
+  const P = cm.passages, c = cm.donnees;
+  if (t <= P[0].t) return { x: P[0].x, z: P[0].z, bouge: false, texte: `Au dépôt · départ à ${heureTexte(c.depart)}` };
+  const der = P[P.length - 1];
+  if (t >= der.t) return { x: der.x, z: der.z, bouge: false, texte: "Tournée terminée", fini: true };
+  let a = 0, b = P.length - 1;
+  while (b - a > 1) { const m = (a + b) >> 1; if (P[m].t <= t) a = m; else b = m; }
+  const p = P[a], s = P[b];
+  if (p.lieu === s.lieu && p.arret) {                 // arrêté chez un client
+    const ar = p.arret, nom = L[ar.client].nom;
+    if (t < ar.debut) return { x: p.x, z: p.z, bouge: false, texte: `Attend l'ouverture · ${nom}` };
+    return { x: p.x, z: p.z, bouge: false, texte: `Livraison · ${nom}`, livre: ar, f: (t - ar.debut) / Math.max(ar.fin - ar.debut, 1e-9) };
+  }
+  const f = (t - p.t) / Math.max(s.t - p.t, 1e-9);
+  const vers = s.lieu === 0 ? "Retour au dépôt" : `En route · ${L[s.lieu].nom}`;
+  return { x: p.x + (s.x - p.x) * f, z: p.z + (s.z - p.z) * f, bouge: true, cap: Math.atan2(s.x - p.x, s.z - p.z), texte: vers };
+}
+
+// =====================================================================
+// 7. Voitures de la circulation (pour la vie de la ville)
+// =====================================================================
+const NB_VOITURES = Math.min(90, Math.max(12, Math.floor(segRoutes.length * .5)));
+const voitures = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, 1, 3.6).translate(0, .85, 0),
+  new THREE.MeshStandardMaterial({ roughness: .35, metalness: .3 }), NB_VOITURES);
+const habitacles = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, .75, 1.9).translate(0, 1.7, -.2),
+  new THREE.MeshStandardMaterial({ color: 0x22303d, roughness: .15, metalness: .5 }), NB_VOITURES);
+voitures.castShadow = OMBRES;
+const teintesVoitures = ["#d32f2f", "#1976d2", "#fafafa", "#212121", "#9e9e9e", "#388e3c", "#fbc02d", "#5d4037"].map(c => new THREE.Color(c));
+const flot = [];
+for (let k = 0; k < NB_VOITURES; k++) {
+  flot.push({ s: segRoutes[Math.floor(rnd() * segRoutes.length)], u: rnd(), sens: rnd() < .5 ? 1 : -1, v: entre(6, 11), pic: rnd() });
+  voitures.setColorAt(k, teintesVoitures[k % teintesVoitures.length]);
+}
+scene.add(voitures, habitacles);
+function avancerVoitures(dt, coef) {
+  const visibles = D.trafic ? .35 + .65 * borne((coef - 1) / .5, 0, 1) : .6;
+  flot.forEach((v, k) => {
+    const s = v.s, lg = Math.hypot(s.x2 - s.x1, s.z2 - s.z1) || 1;
+    v.u += v.sens * v.v / coef * dt / lg;
+    if (v.u > 1 || v.u < 0) { v.s = segRoutes[Math.floor(Math.random() * segRoutes.length)]; v.u = v.sens > 0 ? 0 : 1; }
+    const dx = (s.x2 - s.x1) / lg, dz = (s.z2 - s.z1) / lg;
+    const x = s.x1 + (s.x2 - s.x1) * v.u - dz * .85 * v.sens, z = s.z1 + (s.z2 - s.z1) * v.u + dx * .85 * v.sens;
+    const cap = Math.atan2(dx * v.sens, dz * v.sens), e = v.pic < visibles ? 1 : 0;
+    placer(voitures, k, x, .05, z, cap, e, e, e); placer(habitacles, k, x, .05, z, cap, e, e, e);
+  });
+  voitures.instanceMatrix.needsUpdate = habitacles.instanceMatrix.needsUpdate = true;
+}
+
+// =====================================================================
+// 8. Panneaux : liste des camions, journal, commandes
+// =====================================================================
+const evenements = [];
+D.camions.forEach(c => {
+  evenements.push({ t: c.depart, texte: `Camion ${c.numero} quitte le dépôt`, c: c.couleur });
+  c.arrets.forEach(a => evenements.push({ t: a.fin, texte: `Camion ${c.numero} a livré ${L[a.client].nom}`, c: c.couleur, livraison: true }));
+  evenements.push({ t: c.retour, texte: `Camion ${c.numero} est rentré au dépôt`, c: c.couleur });
+});
+evenements.sort((a, b) => a.t - b.t);
+const totalLivraisons = NB - 1;
+
+const panneauCamions = document.getElementById("camions");
+camions.forEach((cm, k) => {
+  const div = document.createElement("div");
+  div.className = "camion"; div.style.color = cm.donnees.couleur;
+  div.innerHTML = `<div class="ligne1" style="color:#f2f5f7"><span><span class="pastille" style="background:${cm.donnees.couleur}"></span>Camion ${cm.donnees.numero}</span><span class="livres"></span></div>
+    <div class="etat" style="color:#f2f5f7"></div><div class="barre" title="Chargement restant"><div></div></div>`;
+  div.onclick = () => { vue.value = String(k); suivre(k); };
+  panneauCamions.appendChild(div);
+  cm.div = div; cm.divEtat = div.querySelector(".etat"); cm.divLivres = div.querySelector(".livres"); cm.divCharge = div.querySelector(".barre > div");
+});
+
+const vue = document.getElementById("vue");
+vue.innerHTML = `<option value="-1">🗺️ Vue d'ensemble</option>` + camions.map((cm, k) => `<option value="${k}">🚚 Suivre le camion ${cm.donnees.numero}</option>`).join("");
+vue.onchange = () => suivre(Number(vue.value));
+
+let t = T0, lecture = true, vitesse = 1, suivi = -1, cabine = false;
+const DUREE = 60;                                  // secondes pour toute la journée à ×1
+const vitesses = [0.5, 1, 2, 4, 8];
+const zoneVitesses = document.getElementById("vitesses");
+vitesses.forEach(v => {
+  const b = document.createElement("button"); b.textContent = "×" + String(v).replace(".", ",");
+  b.onclick = () => { vitesse = v; [...zoneVitesses.children].forEach(x => x.classList.toggle("actif", x === b)); };
+  if (v === 1) b.classList.add("actif");
+  zoneVitesses.appendChild(b);
+});
+const boutonLecture = document.getElementById("lecture");
+boutonLecture.onclick = () => {
+  if (!lecture && t >= T1) t = T0;
+  lecture = !lecture; boutonLecture.textContent = lecture ? "⏸" : "▶";
+};
+const frise = document.getElementById("temps");
+frise.oninput = () => { t = T0 + (T1 - T0) * frise.value / 1000; };
+document.getElementById("debutFrise").textContent = heureTexte(T0);
+document.getElementById("finFrise").textContent = heureTexte(T1);
+document.getElementById("titre").textContent = `${D.nom} · ${NB - 1} clients · ${D.camions.length} camions`;
+const boutonCabine = document.getElementById("conducteur");
+boutonCabine.onclick = () => {
+  if (suivi < 0) { vue.value = "0"; suivre(0); }
+  cabine = !cabine; boutonCabine.classList.toggle("actif", cabine);
+  controles.enabled = !cabine;
+  if (!cabine) suivre(suivi);
+};
+
+// Caméra : vue d'ensemble, ou suivi d'un camion (on peut toujours tourner autour)
+const cible = new THREE.Vector3(), departCam = new THREE.Vector3(), arriveeCam = new THREE.Vector3();
+let transition = 0;
+function suivre(k) {
+  suivi = k;
+  camions.forEach((cm, i) => cm.div.classList.toggle("suivi", i === k));
+  if (k < 0) {
+    cabine = false; boutonCabine.classList.remove("actif"); controles.enabled = true;
+    vol(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, TAILLE * .5, TAILLE * .62));
+  } else {
+    const cm = camions[k], cap = cm.cap;
+    vol(new THREE.Vector3(cm.x, 2, cm.z), new THREE.Vector3(cm.x - Math.sin(cap) * 24, 15, cm.z - Math.cos(cap) * 24));
+  }
+}
+function vol(versCible, versCamera) {
+  departCam.copy(camera.position); arriveeCam.copy(versCamera);
+  cible.copy(versCible); transition = 1e-6;
+  volDebutCible = controles.target.clone();
+}
+let volDebutCible = new THREE.Vector3();
+
+// Infobulle au survol d'un commerce
+const rayon = new THREE.Raycaster(), souris = new THREE.Vector2(), infobulle = document.getElementById("infobulle");
+let dernierSurvol = 0;
+rendu.domElement.addEventListener("pointermove", ev => {
+  const maintenant = performance.now(); if (maintenant - dernierSurvol < 60) return; dernierSurvol = maintenant;
+  const r = rendu.domElement.getBoundingClientRect();
+  souris.set((ev.clientX - r.left) / r.width * 2 - 1, -(ev.clientY - r.top) / r.height * 2 + 1);
+  rayon.setFromCamera(souris, camera);
+  const touche = rayon.intersectObject(commerces)[0];
+  const surEntrepot = !touche && rayon.intersectObject(murE)[0];
+  if (!touche && !surEntrepot) { infobulle.style.display = "none"; return; }
+  let html;
+  if (surEntrepot) {
+    const partis = D.camions.filter(c => c.depart <= t && t < c.retour).length;
+    html = `<b>🏭 Entrepôt${D.lorraine ? " · " + depot.nom : ""}</b><br>${D.camions.length} camions · capacité ${D.capacite} chacun<br>En tournée : ${partis}`;
+  } else {
+    const i = instanceVersClient[touche.instanceId], info = infoClient[i], p = L[i];
+    const fen = p.fenetre ? `${heureTexte(p.fenetre[0])} – ${heureTexte(p.fenetre[1])}` : "toute la journée";
+    let etat = "à livrer";
+    if (info && t >= info.fin) etat = `✅ livré à ${heureTexte(info.debut)}`;
+    else if (info && t >= info.arrivee) etat = "🟡 livraison en cours";
+    html = `<b>🏪 ${p.nom}</b><br>Commande : ${p.demande} unités<br>Créneau : ${fen}<br>Camion ${info ? D.camions[info.camion].numero : "—"} · ${etat}`;
+  }
+  infobulle.innerHTML = html; infobulle.style.display = "block";
+  infobulle.style.left = Math.min(ev.clientX + 14, r.width - 270) + "px"; infobulle.style.top = (ev.clientY + 14) + "px";
+});
+rendu.domElement.addEventListener("pointerleave", () => { infobulle.style.display = "none"; });
+
+// =====================================================================
+// 9. Ciel : soleil, couleur du ciel, nuit (fenêtres et phares allumés)
+// =====================================================================
+const NUIT = new THREE.Color("#0b1026"), AUBE = new THREE.Color("#f2a65a"), JOUR = new THREE.Color("#8ec5ee"), cielCouleur = new THREE.Color();
+const phare = new THREE.SpotLight(0xfff1c8, 0, 70, Math.PI / 6, .5, 1.2);
+scene.add(phare, phare.target);
+function eclairer(h) {
+  const a = (h - 6) / 12 * Math.PI, hauteur = Math.sin(a);
+  const R = TAILLE;
+  soleil.position.set(-Math.cos(a) * R, Math.max(hauteur, .05) * R, R * .35);
+  soleil.intensity = borne(hauteur * 1.4, 0, 0.95);
+  const nuit = borne(1 - (hauteur + .08) / .3, 0, 1);
+  if (hauteur > .25) cielCouleur.copy(JOUR);
+  else if (hauteur > -.05) cielCouleur.copy(AUBE).lerp(JOUR, (hauteur + .05) / .3);
+  else cielCouleur.copy(NUIT).lerp(AUBE, borne((hauteur + .25) / .2, 0, 1));
+  scene.background = cielCouleur; scene.fog.color.copy(cielCouleur);
+  ciel.intensity = .2 + .42 * (1 - nuit);
+  lune.intensity = .25 * nuit;
+  materiauxFenetres.forEach(m => { m.emissiveIntensity = 1.1 * nuit; });
+  matPhare.emissiveIntensity = .3 + 2.5 * nuit; matFeu.emissiveIntensity = .4 + 1.5 * nuit;
+  matNuage.opacity = .9 - .55 * nuit;
+  return nuit;
+}
+
+// =====================================================================
+// 10. La boucle d'animation
+// =====================================================================
+let avant = performance.now(), dernierEvenement = -2, derniersLivres = -1;
+const champHeure = document.getElementById("heure"), barreJour = document.getElementById("barreJour");
+const champCompteur = document.getElementById("compteur"), champTrafic = document.getElementById("trafic"), journal = document.getElementById("journal");
+camera.position.set(0, TAILLE * 1.1, TAILLE * 1.1);
+suivre(-1);
+
+function image() {
+  requestAnimationFrame(image);
+  const maintenant = performance.now(), dt = Math.min((maintenant - avant) / 1000, .1); avant = maintenant;
+  if (lecture && conteneur.clientWidth > 0) {      // onglet caché : la journée attend
+    t += (T1 - T0) / DUREE * vitesse * dt;
+    if (t >= T1) { t = T1; lecture = false; boutonLecture.textContent = "▶"; }
+  }
+  frise.value = Math.round(1000 * (t - T0) / Math.max(T1 - T0, 1e-9));
+
+  // Horloge, trafic, ciel
+  champHeure.textContent = (D.lorraine ? "🕒 " : "Journée ") + heureTexte(t);
+  barreJour.style.width = (100 * borne((t - D.ouverture) / (D.fermeture - D.ouverture), 0, 1)) + "%";
+  const tr = coefTrafic(t);
+  if (D.trafic) {
+    champTrafic.style.display = "inline-block";
+    champTrafic.textContent = `🚦 ${tr.nom} · ×${String(tr.coef).replace(".", ",")}`;
+    champTrafic.style.background = tr.coef >= 1.4 ? "#c0392b" : tr.coef > 1.05 ? "#e67e22" : "#27ae60";
+    matRoute.color.setRGB(1, 1 - .35 * (tr.coef - 1), 1 - .35 * (tr.coef - 1));
+  }
+  const nuit = eclairer(heureLumiere(t));
+  nuages.children.forEach(n => { n.position.x += n.userData.v * dt; if (n.position.x > maxX + 150) n.position.x = minX - 150; });
+  avancerVoitures(dt * (lecture ? Math.min(vitesse, 3) : 0), tr.coef);
+
+  // Camions
+  camions.forEach((cm, k) => {
+    const e = etatCamion(cm, t);
+    const dx = e.x - cm.x, dz = e.z - cm.z, d = Math.hypot(dx, dz);
+    if (e.bouge) {
+      let diff = e.cap - cm.cap; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      cm.cap += diff * Math.min(1, dt * 8);
+    }
+    if (!e.bouge && (t <= cm.passages[0].t || e.fini)) cm.cap = capParking;   // garé face à l'entrepôt
+    cm.x = e.x; cm.z = e.z;
+    // on roule à droite de la route
+    const decal = e.bouge ? .9 : 0;
+    cm.groupe.position.set(cm.x + Math.cos(cm.cap) * decal, 0, cm.z - Math.sin(cm.cap) * decal);
+    cm.groupe.rotation.y = cm.cap;
+    cm.roues.forEach(r => { r.rotation.x += d / .55 * (dx * Math.sin(cm.cap) + dz * Math.cos(cm.cap) >= 0 ? 1 : -1); });
+    // le colis va du camion à la porte pendant la livraison
+    if (e.livre && posBatiment[e.livre.client]) {
+      const b = posBatiment[e.livre.client], f = e.f;
+      cm.colis.visible = f < .95;
+      cm.colis.position.set(cm.x + (b.porteX - cm.x) * f, .45 + Math.sin(f * Math.PI) * 1.2, cm.z + (b.porteZ - cm.z) * f);
+    } else cm.colis.visible = false;
+    // panneau
+    const livres = cm.donnees.arrets.filter(a => a.fin <= t);
+    const reste = cm.donnees.charge - livres.reduce((s, a) => s + L[a.client].demande, 0);
+    if (cm.texte !== e.texte) { cm.divEtat.textContent = e.texte; cm.texte = e.texte; }
+    cm.divLivres.textContent = `${livres.length}/${cm.donnees.arrets.length}`;
+    cm.divCharge.style.width = (100 * reste / D.capacite) + "%";
+  });
+
+  // Repères des clients
+  let modif = false;
+  for (let i = 1; i < NB; i++) {
+    const info = infoClient[i]; if (!info || !posBatiment[i]) continue;
+    const etat = t >= info.fin ? 2 : t >= info.arrivee ? 1 : 0;
+    if (etat === 1 || etat !== etatClient[i]) {
+      const b = posBatiment[i], h = b.haut + (etat === 2 ? 4.2 : 5.5) + (etat === 1 ? Math.sin(maintenant / 150) * .6 : 0);
+      const s = etat === 2 ? .7 : etat === 1 ? 1.3 : 1;
+      placer(reperes, i, b.x, h, b.z, maintenant / 600, s, s, s);
+      reperes.setColorAt(i, etat === 2 ? VERT : etat === 1 ? JAUNE : couleursCamions[info.camion] || GRIS);
+      etatClient[i] = etat; modif = true;
+    }
+  }
+  if (modif) { reperes.instanceMatrix.needsUpdate = true; reperes.instanceColor.needsUpdate = true; }
+
+  // Compteur et journal
+  let a = 0, b = evenements.length;
+  while (a < b) { const m = (a + b) >> 1; if (evenements[m].t <= t) a = m + 1; else b = m; }
+  const derniers = a - 1;
+  if (derniers !== dernierEvenement) {
+    dernierEvenement = derniers;
+    const livres = evenements.slice(0, a).filter(e => e.livraison).length;
+    if (livres !== derniersLivres) { derniersLivres = livres; champCompteur.innerHTML = `📦 Livraisons : <b>${livres}</b> / ${totalLivraisons}`; }
+    journal.innerHTML = "<b>Journal de la journée</b><br>" + (evenements.slice(Math.max(0, a - 7), a).reverse()
+      .map(e => `<span style="color:${e.c}">●</span> ${heureTexte(e.t)} · ${e.texte}`).join("<br>") || "<i>La journée commence…</i>");
+  }
+
+  // Caméra
+  if (transition > 0) {
+    transition = Math.min(1, transition + dt / 1.6);
+    const f = 1 - Math.pow(1 - transition, 3);
+    if (suivi >= 0) cible.set(camions[suivi].x, 2, camions[suivi].z);
+    camera.position.lerpVectors(departCam, arriveeCam, f);
+    controles.target.lerpVectors(volDebutCible, cible, f);
+    if (transition >= 1) transition = 0;
+  } else if (suivi >= 0 && !cabine) {
+    const cm = camions[suivi];
+    const dx = cm.x - controles.target.x, dz = cm.z - controles.target.z;
+    controles.target.x += dx; controles.target.z += dz; camera.position.x += dx; camera.position.z += dz;
+  }
+  if (cabine && suivi >= 0) {
+    const cm = camions[suivi], g = cm.groupe;
+    const devant = new THREE.Vector3(0, 2.9, 2.9).applyMatrix4(g.matrixWorld);
+    const loin = new THREE.Vector3(0, 2.2, 40).applyMatrix4(g.matrixWorld);
+    camera.position.lerp(devant, .25); controles.target.copy(loin); camera.lookAt(loin);
+  } else controles.update();
+
+  // Phare du camion suivi, la nuit
+  if (suivi >= 0) {
+    const g = camions[suivi].groupe;
+    phare.position.copy(new THREE.Vector3(0, 1.6, 3.4).applyMatrix4(g.matrixWorld));
+    phare.target.position.copy(new THREE.Vector3(0, 0, 30).applyMatrix4(g.matrixWorld));
+    phare.intensity = 3 * nuit;
+  } else phare.intensity = 0;
+
+  rendu.render(scene, camera);
+}
+for (const m of [parcelles, commerces, toits, terrains, maisons, immeubles, tours, toitsMaisons, troncs, feuillages, carrefours, voitures])
+  { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+image();
+</script>
+</body>
+</html>
