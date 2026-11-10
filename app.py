@@ -45,18 +45,26 @@ if ev["realisable"]:
 else:
     st.error("❌ " + " ; ".join(ev["violations"][:10]))
 
-# 4. Le suivi 2D : position de chaque camion à 100 heures de la journée.
+# 4. Le suivi 2D : position de chaque camion à 100 moments de la journée.
 #    Un camion va en ligne droite d'un lieu au suivant, et reste sur place pendant
 #    l'attente et la livraison (np.interp interpole entre ces points de passage).
-#    Chaque image a son étiquette d'heure, toujours différente des autres (sinon plotly
-#    fusionne les images et on voit plusieurs positions du même camion).
-def heure_lisible(h):
-    """Lorraine : minutes depuis minuit -> « 7h29 ». Autres instances : l'unité de temps du fichier."""
-    return f"{int(h) // 60}h{int(h) % 60:02d}" if "villes" in inst else f"{h:.1f}"
+#    Le moment de la journée est affiché en vrai horaire pour la Lorraine (minutes depuis
+#    minuit), et en % de la journée pour les autres instances, dont le temps n'est pas
+#    une heure (0 % = ouverture du dépôt, 100 % = fermeture).
+ouverture, fermeture = inst["fenetres"][0] if inst["fenetres"] is not None else (0, inst["horizon"])
 
 
+def moment(h):
+    if "villes" in inst:
+        return f"{int(h) // 60}h{int(h) % 60:02d}"
+    return f"{100 * (h - ouverture) / (fermeture - ouverture):.1f} %"
+
+
+# Une image par étiquette différente (sinon plotly fusionne deux images et on croirait
+# voir plusieurs positions du même camion)
 xy = inst["coords"]
-heures = np.linspace(min(t["depart"] for t in ev["tournees"]), max(t["retour"] for t in ev["tournees"]), 100)
+images = {moment(h): h for h in np.linspace(min(t["depart"] for t in ev["tournees"]),
+                                             max(t["retour"] for t in ev["tournees"]), 100)}
 lignes = []
 for t in ev["tournees"]:
     lieux, passages = [0], [t["depart"]]                # départ du dépôt
@@ -65,14 +73,15 @@ for t in ev["tournees"]:
         passages += [a["arrivee"], a["fin"]]
     lieux.append(0)                                     # retour au dépôt
     passages.append(t["retour"])
-    for h in heures:
-        lignes.append({"heure": heure_lisible(h), "camion": f"Camion {t['numero']}",
+    for etiquette, h in images.items():
+        lignes.append({"moment": etiquette, "camion": f"Camion {t['numero']}",
                        "x": np.interp(h, passages, xy[lieux, 0]), "y": np.interp(h, passages, xy[lieux, 1])})
 
 couleurs = px.colors.qualitative.Plotly                # la même couleur pour un camion et sa tournée
 marge = 0.05 * np.ptp(xy)
-suivi = px.scatter(pd.DataFrame(lignes), x="x", y="y", color="camion", animation_frame="heure",
-                   color_discrete_sequence=couleurs, labels={"x": "", "y": "", "camion": "", "heure": "Heure"},
+suivi = px.scatter(pd.DataFrame(lignes), x="x", y="y", color="camion", animation_frame="moment",
+                   color_discrete_sequence=couleurs,
+                   labels={"x": "", "y": "", "camion": "", "moment": "Heure" if "villes" in inst else "Journée"},
                    range_x=[xy[:, 0].min() - marge, xy[:, 0].max() + marge],
                    range_y=[xy[:, 1].min() - marge, xy[:, 1].max() + marge], height=650)
 suivi.update_traces(marker_size=12)
@@ -89,7 +98,9 @@ suivi.update_layout(showlegend=ev["nb_vehicules"] <= 20)
 suivi.layout.updatemenus[0].buttons[0].args[1].update(frame=dict(duration=100), transition=dict(duration=0))
 suivi.layout.sliders[0].transition.duration = 0
 st.plotly_chart(suivi, width="stretch")
-st.caption("Cliquez sur ▶ (sous la carte) pour voir les camions avancer heure par heure.")
+st.caption("Cliquez sur ▶ (sous la carte) pour voir les camions avancer au fil de la journée. "
+           "Hors Lorraine, le temps des instances n'est pas une heure : il est donné en % de la "
+           "journée (0 % = ouverture du dépôt, 100 % = fermeture).")
 
 # 5. Le détail de chaque tournée
 nom_lieu = inst.get("villes") or ["Dépôt"] + [f"Client {i}" for i in range(1, inst["n"] + 1)]
