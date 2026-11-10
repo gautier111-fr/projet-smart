@@ -506,7 +506,7 @@ L'algorithme l'utilise pour vérifier les fenêtres de temps (`trajet()`), et `e
 le trafic, la méthode (GRASP + Tabou, ou PLNE jusqu'à 15 clients) et le temps de calcul. Après
 ▶ Lancer, `app.py` appelle `lancer(...)` puis `evaluer(...)`, et affiche la distance, le gap,
 le nombre de camions, le temps, les contraintes respectées ou non, la carte des tournées et
-le parcours de chaque camion. La carte est aussi un **suivi 2D** : à 60 heures de la journée,
+le parcours de chaque camion. La carte est aussi un **suivi 2D** : à 100 heures de la journée (chacune avec son étiquette, « 7h29 » pour la Lorraine),
 on calcule la position de chaque camion avec `np.interp` (il va en ligne droite d'un lieu au
 suivant et reste sur place pendant l'attente et la livraison), et le bouton ▶ fait défiler ces
 heures. Tout tient dans `app.py` (environ 90 lignes, sans logique de calcul) : il n'y a rien à

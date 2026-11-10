@@ -48,6 +48,13 @@ else:
 # 4. Le suivi 2D : position de chaque camion à 100 heures de la journée.
 #    Un camion va en ligne droite d'un lieu au suivant, et reste sur place pendant
 #    l'attente et la livraison (np.interp interpole entre ces points de passage).
+#    Chaque image a son étiquette d'heure, toujours différente des autres (sinon plotly
+#    fusionne les images et on voit plusieurs positions du même camion).
+def heure_lisible(h):
+    """Lorraine : minutes depuis minuit -> « 7h29 ». Autres instances : l'unité de temps du fichier."""
+    return f"{int(h) // 60}h{int(h) % 60:02d}" if "villes" in inst else f"{h:.1f}"
+
+
 xy = inst["coords"]
 heures = np.linspace(min(t["depart"] for t in ev["tournees"]), max(t["retour"] for t in ev["tournees"]), 100)
 lignes = []
@@ -59,13 +66,13 @@ for t in ev["tournees"]:
     lieux.append(0)                                     # retour au dépôt
     passages.append(t["retour"])
     for h in heures:
-        lignes.append({"heure": round(h), "camion": f"Camion {t['numero']}",
+        lignes.append({"heure": heure_lisible(h), "camion": f"Camion {t['numero']}",
                        "x": np.interp(h, passages, xy[lieux, 0]), "y": np.interp(h, passages, xy[lieux, 1])})
 
 couleurs = px.colors.qualitative.Plotly                # la même couleur pour un camion et sa tournée
 marge = 0.05 * np.ptp(xy)
 suivi = px.scatter(pd.DataFrame(lignes), x="x", y="y", color="camion", animation_frame="heure",
-                   color_discrete_sequence=couleurs, labels={"x": "", "y": "", "camion": ""},
+                   color_discrete_sequence=couleurs, labels={"x": "", "y": "", "camion": "", "heure": "Heure"},
                    range_x=[xy[:, 0].min() - marge, xy[:, 0].max() + marge],
                    range_y=[xy[:, 1].min() - marge, xy[:, 1].max() + marge], height=650)
 suivi.update_traces(marker_size=12)
