@@ -15,11 +15,11 @@ Ce qu'on y voit :
   store et enseigne ; entrepôt avec quais et bureaux ; tours vitrées, immeubles, maisons ; trottoirs,
   lampadaires, arbres, champs ; voitures qui circulent ;
 * **la journée** : ciel physique (lever et coucher du soleil, étoiles et lune), ombres, reflets du ciel
-  sur les vitres ; la nuit, fenêtres, enseignes, lampadaires et phares s'allument ; pluie au choix ;
+  sur les vitres ; la nuit, fenêtres, enseignes, lampadaires et phares s'allument ;
 * **les camions** : ils accélèrent, roulent à droite, freinent (feux stop), clignotent dans les virages,
-  se garent devant le commerce et déposent le colis ; repère au-dessus de chaque client (à livrer,
-  en cours, livré) ;
+  se garent devant le commerce ; un livreur descend à l'arrière, porte le colis jusqu'à la porte,
+  le pose (il y reste) et revient ; repère au-dessus de chaque client (à livrer, en cours, livré) ;
 * **les vues** : vue d'ensemble, suivi d'un camion (clic sur le camion ou dans la liste) avec GPS et
   compteur de vitesse, vue depuis la cabine, mode cinéma (la caméra filme seule), plein écran ;
-* **les commandes** : lecture, vitesse ×0,5 à ×8, frise de la journée, son (moteur, ville, pluie),
+* **les commandes** : lecture, vitesse ×0,5 à ×8, frise de la journée, son (moteur, ville),
   qualité de l'image (baissée automatiquement si l'ordinateur peine).

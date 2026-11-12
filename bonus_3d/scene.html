@@ -74,7 +74,7 @@
   <div id="heure"></div>
   <div class="barre"><div id="barreJour"></div></div>
   <div id="compteur"></div>
-  <div id="badges"><span id="trafic" class="badge"></span><span id="meteo" class="badge"></span></div>
+  <div id="badges"><span id="trafic" class="badge"></span></div>
 </div>
 <div id="commandes" class="panneau">
   <button id="lecture" title="Lecture / pause">⏸</button>
@@ -82,7 +82,6 @@
   <select id="vue" title="Caméra"></select>
   <button id="cabine" title="Vue depuis le siège du conducteur">🎥 Cabine</button>
   <button id="cinema" title="La caméra filme toute seule">🎬 Cinéma</button>
-  <button id="pluie" title="Météo">🌧️ Pluie</button>
   <button id="son" title="Son du moteur et de la ville">🔇 Son</button>
   <button id="tournees" class="actif" title="Afficher le trajet de chaque camion">Tournées</button>
   <select id="qualite" title="Qualité de l'image"><option value="2">Qualité haute</option><option value="1">Qualité moyenne</option><option value="0">Qualité basse</option></select>
@@ -273,7 +272,7 @@ U.mieCoefficient.value = .005; U.mieDirectionalG.value = .8;
 const sceneReflets = new THREE.Scene(), cielReflets = new THREE.Sky();
 cielReflets.scale.setScalar(1000); cielReflets.material.uniforms = U; sceneReflets.add(cielReflets);
 const pmrem = new THREE.PMREMGenerator(rendu);
-let refletsRT = null, heureReflets = -99, pluieReflets = null;
+let refletsRT = null, heureReflets = -99;
 function majReflets() {
   const rt = pmrem.fromScene(sceneReflets, 0, 0.1, 5000);
   if (refletsRT) refletsRT.dispose();
@@ -903,8 +902,6 @@ function creerCamion(c, k) {
     if (D.camions.length <= 30) { const n = etiquette(String(c.numero), c.couleur, "#fff", .55); n.position.y = 6.6; g.add(n); cm.numero = n; }
   }
   g.traverse(o => { o.userData.camion = k; });
-  const colis = new THREE.Mesh(new THREE.BoxGeometry(.9, .7, .9), new THREE.MeshStandardMaterial({ color: 0xc8a165, roughness: .9 }));
-  colis.castShadow = true; colis.visible = false; scene.add(colis); cm.colis = colis;
   scene.add(g);
   const P = placeParking(k);
   Object.assign(cm, { parking: P, cap: capParking, x: P.x, z: P.z, passages: construirePassages(c, P), etat: {} });
@@ -912,9 +909,16 @@ function creerCamion(c, k) {
 }
 function construirePassages(c, P) {               // lieu et heure de chaque passage (comme le suivi 2D)
   const p = [{ t: c.depart, x: P.x, z: P.z, lieu: 0 }];
+  let avant = c.depart;
   for (const a of c.arrets) {
     const s = arretDe[a.client];
-    p.push({ t: a.arrivee, x: s.x, z: s.z, lieu: a.client, arret: a, d: a.d }, { t: a.fin, x: s.x, z: s.z, lieu: a.client, arret: a });
+    // Le livreur a besoin d'un peu de temps : sans temps de service (CVRP), l'arrêt à l'écran prend
+    // 35 % de la fin du trajet ; la livraison se termine toujours à l'heure calculée.
+    const mini = .35 * (a.arrivee - avant);
+    const v = a.fin - a.debut >= mini ? { ...a, vrai: a } : { ...a, vrai: a, debut: a.fin - mini, arrivee: Math.min(a.arrivee, a.fin - mini) };
+    infoClient[a.client].vis = v;
+    p.push({ t: v.arrivee, x: s.x, z: s.z, lieu: a.client, arret: v, d: a.d }, { t: v.fin, x: s.x, z: s.z, lieu: a.client, arret: v });
+    avant = a.fin;
   }
   p.push({ t: c.retour, x: P.x, z: P.z, lieu: 0, d: c.d_retour });
   return p;
@@ -946,6 +950,85 @@ function etatCamion(cm, t) {
   return { x: p.x + dx * g - uz * w, z: p.z + dz * g + ux * w, bouge: true, cap: Math.atan2(dx, dz),
            vit: 60 * (s.d || 0) / duree * vmax * v, freine: f > 1 - r, reste: (1 - g) * (s.d || 0),
            texte: s.lieu === 0 ? "Retour au dépôt" : `En route · ${L[s.lieu].nom}`, prochain: b };
+}
+
+// =====================================================================
+// 6 bis. Les livreurs : à chaque arrêt, un livreur descend à l'arrière du camion, porte le colis
+// jusqu'à la porte du commerce, le pose, et revient. Le colis reste devant la porte.
+// =====================================================================
+const matPeau = new THREE.MeshStandardMaterial({ color: 0xd9a77f, roughness: .7 });
+const matTenue = new THREE.MeshStandardMaterial({ color: 0x2b4f3a, roughness: .8 });
+const matPantalon = new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: .85 });
+const matGilet = new THREE.MeshStandardMaterial({ color: 0xf2c12e, emissive: 0x332600, roughness: .6 });
+const matCarton = new THREE.MeshStandardMaterial({ map: toile(64, 64, (g, l, h) => {
+  g.fillStyle = "#c8a165"; g.fillRect(0, 0, l, h); grain(g, l, h, 200, ["rgba(0,0,0,.08)", "rgba(255,255,255,.08)"], 1.5);
+  g.fillStyle = "#b08a52"; g.fillRect(l / 2 - 5, 0, 10, h);                     // ruban adhésif
+}), roughness: .9 });
+function membre(l, h, p, mat, x, y) {           // bras ou jambe qui pivote à l'épaule ou à la hanche
+  const pivot = new THREE.Group(); pivot.position.set(x, y, 0);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(l, h, p), mat); m.position.y = -h / 2; m.castShadow = true;
+  pivot.add(m); return pivot;
+}
+function creerLivreur() {
+  const g = new THREE.Group();
+  const jambes = [membre(.2, .88, .22, matPantalon, .12, .9), membre(.2, .88, .22, matPantalon, -.12, .9)];
+  const bras = [membre(.13, .62, .15, matTenue, .34, 1.58), membre(.13, .62, .15, matTenue, -.34, 1.58)];
+  const torse = new THREE.Mesh(new THREE.BoxGeometry(.56, .72, .3), matTenue); torse.position.y = 1.26;
+  const gilet = new THREE.Mesh(new THREE.BoxGeometry(.58, .4, .32), matGilet); gilet.position.y = 1.3;
+  const tete = new THREE.Mesh(new THREE.SphereGeometry(.16, 14, 12), matPeau); tete.position.y = 1.83;
+  const casquette = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .09, 14), matTenue); casquette.position.y = 1.95;
+  const visiere = new THREE.Mesh(new THREE.BoxGeometry(.24, .025, .16), matTenue); visiere.position.set(0, 1.92, .17);
+  const colis = new THREE.Mesh(new THREE.BoxGeometry(.5, .38, .42), matCarton); colis.position.set(0, 1.22, .4);
+  for (const m of [torse, gilet, tete, casquette, colis]) m.castShadow = true;
+  g.add(...jambes, ...bras, torse, gilet, tete, casquette, visiere, colis);
+  g.visible = false; scene.add(g);
+  return { g, jambes, bras, colis, camion: -1 };
+}
+const livreurs = Array.from({ length: Math.max(1, Math.min(D.camions.length, 40)) }, creerLivreur);
+// Colis déposés devant les portes
+const colisDeposes = instances(new THREE.BoxGeometry(.5, .38, .42).translate(0, .19, 0), matCarton, NB);
+colisDeposes.count = NB;
+for (let i = 0; i < NB; i++) placer(colisDeposes, i, 0, -50, 0, 0, 0, 0, 0);
+const colisPose = new Array(NB).fill(false);
+function devantPorte(i) {                         // là où le livreur s'arrête, juste devant la porte
+  const b = posBatiment[i], a = angleLibre[i];
+  return { x: b.porteX - Math.cos(a) * .7, z: b.porteZ - Math.sin(a) * .7 };
+}
+function poserColis(i, pose) {
+  if (!posBatiment[i]) return;
+  const d = devantPorte(i);
+  if (pose) placer(colisDeposes, i, d.x + Math.sin(i) * .3, 0, d.z + Math.cos(i) * .3, i, 1, 1, 1);
+  else placer(colisDeposes, i, 0, -50, 0, 0, 0, 0, 0);
+  colisDeposes.instanceMatrix.needsUpdate = true;
+}
+function animerLivreurs() {
+  const livrent = new Set();
+  camions.forEach((cm, k) => { if (cm.etat.livre && posBatiment[cm.etat.livre.client]) livrent.add(k); });
+  for (const l of livreurs) if (l.camion >= 0 && !livrent.has(l.camion)) { l.camion = -1; l.g.visible = false; }
+  for (const k of livrent) {
+    let l = livreurs.find(x => x.camion === k);
+    if (!l) { l = livreurs.find(x => x.camion < 0); if (!l) continue; l.camion = k; }
+    const cm = camions[k], f = cm.etat.f, i = cm.etat.livre.client;
+    const arriere = { x: cm.x - Math.sin(cm.cap) * 3.9, z: cm.z - Math.cos(cm.cap) * 3.9 };
+    const porte = devantPorte(i);
+    const pas = Math.max(2, Math.hypot(porte.x - arriere.x, porte.z - arriere.z) / .75);
+    let x = arriere.x, z = arriere.z, aller = true, marche = 0, avecColis = true, penche = 0;
+    if (f < .08) { }                                                   // il sort de l'arrière du camion
+    else if (f < .45) { const u = (f - .08) / .37; x += (porte.x - x) * u; z += (porte.z - z) * u; marche = u * pas; }
+    else if (f < .6) { x = porte.x; z = porte.z; penche = Math.sin((f - .45) / .15 * Math.PI); avecColis = f < .55; }
+    else if (f < .94) { const u = (f - .6) / .34; x = porte.x + (arriere.x - porte.x) * u; z = porte.z + (arriere.z - porte.z) * u; aller = false; marche = u * pas; avecColis = false; }
+    else { l.g.visible = false; continue; }                           // il remonte dans le camion
+    l.g.visible = true;
+    l.g.position.set(x, 0, z);
+    const sens = aller ? 1 : -1;
+    l.g.rotation.y = Math.atan2(sens * (porte.x - arriere.x), sens * (porte.z - arriere.z));
+    const balance = marche > 0 ? Math.sin(marche * Math.PI) * .55 : 0;
+    l.jambes[0].rotation.x = balance; l.jambes[1].rotation.x = -balance;
+    if (avecColis) l.bras[0].rotation.x = l.bras[1].rotation.x = -1.2 + penche * .6;
+    else { l.bras[0].rotation.x = -balance * .8; l.bras[1].rotation.x = balance * .8; }
+    l.colis.visible = avecColis;
+    l.colis.position.y = 1.22 - penche * .5;
+  }
 }
 
 // =====================================================================
@@ -984,30 +1067,7 @@ function avancerVoitures(dt, coef) {
 }
 
 // =====================================================================
-// 8. La pluie
-// =====================================================================
-let pluie = false;
-const NB_GOUTTES = 9000, ZONE = 140;
-const posGouttes = new Float32Array(NB_GOUTTES * 6);
-for (let i = 0; i < NB_GOUTTES; i++) {
-  const x = entre(-ZONE, ZONE), y = entre(0, 90), z = entre(-ZONE, ZONE);
-  posGouttes.set([x, y, z, x + .15, y + 1.3, z], i * 6);
-}
-const geoPluie = new THREE.BufferGeometry(); geoPluie.setAttribute("position", new THREE.BufferAttribute(posGouttes, 3));
-const gouttes = new THREE.LineSegments(geoPluie, new THREE.LineBasicMaterial({ color: 0xaabbd0, transparent: true, opacity: .4 }));
-gouttes.visible = false; gouttes.frustumCulled = false; scene.add(gouttes);
-function tomberPluie(dt) {
-  gouttes.position.set(camera.position.x, Math.max(0, camera.position.y - 45), camera.position.z);
-  for (let i = 0; i < NB_GOUTTES; i++) {
-    const o = i * 6; let y = posGouttes[o + 1] - 75 * dt;
-    if (y < 0) y += 90;
-    posGouttes[o + 1] = y; posGouttes[o + 4] = y + 1.3;
-  }
-  geoPluie.attributes.position.needsUpdate = true;
-}
-
-// =====================================================================
-// 9. Panneaux, commandes, caméra
+// 8. Panneaux, commandes, caméra
 // =====================================================================
 const evenements = [];
 D.camions.forEach(c => {
@@ -1191,12 +1251,7 @@ rendu.domElement.addEventListener("pointermove", ev => {
 });
 rendu.domElement.addEventListener("pointerleave", () => { infobulle.style.display = "none"; });
 
-// Météo, son, qualité, plein écran
-document.getElementById("pluie").onclick = e => {
-  pluie = !pluie; e.target.classList.toggle("actif", pluie); gouttes.visible = pluie;
-  matRoute.roughness = pluie ? .22 : .88; matRoute.metalness = pluie ? .35 : 0;
-  annoncer(pluie ? "🌧️ Il pleut : chaussée mouillée" : "☀️ Retour du beau temps");
-};
+// Son, qualité, plein écran
 document.getElementById("qualite").onchange = e => regler(Number(e.target.value));
 function regler(q) {
   qualite = q; document.getElementById("qualite").value = String(q);
@@ -1217,7 +1272,7 @@ document.getElementById("son").onclick = e => {
   sonActif = !sonActif; e.target.textContent = sonActif ? "🔊 Son" : "🔇 Son"; e.target.classList.toggle("actif", sonActif);
   if (sonActif) audio.ctx.resume(); else audio.ctx.suspend();
 };
-function creerSon() {                             // moteur diesel + rumeur de la ville + pluie, synthétisés
+function creerSon() {                             // moteur diesel + rumeur de la ville, synthétisés
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const maitre = ctx.createGain(); maitre.gain.value = .7; maitre.connect(ctx.destination);
   const filtre = ctx.createBiquadFilter(); filtre.type = "lowpass"; filtre.frequency.value = 380;
@@ -1230,9 +1285,7 @@ function creerSon() {                             // moteur diesel + rumeur de l
   const bruit = ctx.createBufferSource(); bruit.buffer = tampon; bruit.loop = true; bruit.start();
   const ville = ctx.createBiquadFilter(); ville.type = "lowpass"; ville.frequency.value = 500;
   const gainVille = ctx.createGain(); gainVille.gain.value = .05; bruit.connect(ville); ville.connect(gainVille); gainVille.connect(maitre);
-  const averse = ctx.createBiquadFilter(); averse.type = "highpass"; averse.frequency.value = 2500;
-  const gainPluie = ctx.createGain(); gainPluie.gain.value = 0; bruit.connect(averse); averse.connect(gainPluie); gainPluie.connect(maitre);
-  return { ctx, o1, o2, gainMoteur, filtre, gainPluie, gainVille };
+  return { ctx, o1, o2, gainMoteur, filtre, gainVille };
 }
 function majSon() {
   if (!audio || !sonActif) return;
@@ -1241,7 +1294,6 @@ function majSon() {
   audio.o1.frequency.setTargetAtTime(regime, n, .15); audio.o2.frequency.setTargetAtTime(regime * 2, n, .15);
   audio.filtre.frequency.setTargetAtTime(300 + v * 6, n, .2);
   audio.gainMoteur.gain.setTargetAtTime(cm ? (mode === "cabine" ? .11 : .05) + v * .0012 : 0, n, .25);
-  audio.gainPluie.gain.setTargetAtTime(pluie ? .1 : 0, n, .5);
   audio.gainVille.gain.setTargetAtTime(mode === "cabine" ? .02 : .045, n, .5);
 }
 
@@ -1286,7 +1338,7 @@ function dessinerGps(cm) {
     const km = (e2.reste || 0) * D.km_par_unite;
     if (prochain.lieu === 0) html = `<span class="grand">🏭 Retour au dépôt</span><br>${e2.bouge ? virgule(km.toFixed(1)) + " km · " : ""}arrivée ${heureTexte(prochain.t)}`;
     else {
-      const p = L[prochain.lieu], a = prochain.arret;
+      const p = L[prochain.lieu], a = prochain.arret.vrai || prochain.arret;
       const fen = p.fenetre ? `créneau ${heureTexte(p.fenetre[0])} – ${heureTexte(p.fenetre[1])}` : "sans créneau";
       const attente = a.debut - a.arrivee > 0.5 ? ` · attente ${D.lorraine ? Math.round(a.debut - a.arrivee) + " min" : "prévue"}` : " · à l'heure";
       html = `<span class="grand">📍 ${typeDe(prochain.lieu)} · ${p.nom}</span><br>${e2.bouge ? virgule(km.toFixed(1)) + " km · " : ""}arrivée ${heureTexte(a.arrivee)}${attente}<br>${fen} · ${p.demande} unités`;
@@ -1315,36 +1367,34 @@ function dessinerCompteur(cm) {
 }
 
 // =====================================================================
-// 10. Ciel : soleil, lune, étoiles, nuit (fenêtres, lampadaires, phares)
+// 9. Ciel : soleil, lune, étoiles, nuit (fenêtres, lampadaires, phares)
 // =====================================================================
 const dirSoleil = new THREE.Vector3(), couleurBrume = new THREE.Color();
-const BRUME_JOUR = new THREE.Color("#cfdce8"), BRUME_AUBE = new THREE.Color("#e8b48a"), BRUME_NUIT = new THREE.Color("#0b1124"), BRUME_PLUIE = new THREE.Color("#8d97a3");
+const BRUME_JOUR = new THREE.Color("#cfdce8"), BRUME_AUBE = new THREE.Color("#e8b48a"), BRUME_NUIT = new THREE.Color("#0b1124");
 let nuit = 0;
 function majCiel(h) {
   const a = (h - 6) / 12 * Math.PI, hauteur = Math.sin(a);
   dirSoleil.set(-Math.cos(a), hauteur, .35).normalize();
   U.sunPosition.value.copy(dirSoleil);
-  U.turbidity.value = pluie ? 14 : 2.8 + 3 * (1 - borne(hauteur, 0, 1));
-  U.rayleigh.value = pluie ? 3.5 : .9 + 2 * (1 - borne(hauteur * 2, 0, 1));
+  U.turbidity.value = 2.8 + 3 * (1 - borne(hauteur, 0, 1));
+  U.rayleigh.value = .9 + 2 * (1 - borne(hauteur * 2, 0, 1));
   nuit = borne((.1 - hauteur) / .3, 0, 1);              // aube et crépuscule : à moitié allumé
   const jour = borne(hauteur * 3, 0, 1);
-  soleil.intensity = jour * (pluie ? .6 : 1.9);
+  soleil.intensity = jour * 1.9;
   soleil.color.setRGB(1, .78 + .2 * jour, .6 + .36 * jour);
-  hemi.intensity = (pluie ? .45 : .5) * (1 - nuit) + .05;
+  hemi.intensity = .5 * (1 - nuit) + .05;
   hemi.color.setRGB(.85 - .45 * nuit, .9 - .4 * nuit, 1);
   lune.intensity = .3 * nuit;
   lune.position.set(-dirSoleil.x, Math.max(.3, -dirSoleil.y), -dirSoleil.z).multiplyScalar(TAILLE);
   rendu.toneMappingExposure = .42 + .12 * nuit;
-  etoiles.material.opacity = pluie ? 0 : nuit;
-  halosLune.material.opacity = pluie ? 0 : nuit * .9;
+  etoiles.material.opacity = nuit;
+  halosLune.material.opacity = nuit * .9;
   halosLune.position.copy(lune.position).normalize().multiplyScalar(TAILLE * 3);
   // brume : couleur du ciel à l'horizon
   if (hauteur > .25) couleurBrume.copy(BRUME_JOUR);
   else if (hauteur > -.05) couleurBrume.copy(BRUME_AUBE).lerp(BRUME_JOUR, (hauteur + .05) / .3);
   else couleurBrume.copy(BRUME_NUIT).lerp(BRUME_AUBE, borne((hauteur + .25) / .2, 0, 1));
-  if (pluie) couleurBrume.lerp(BRUME_PLUIE, .7 * (1 - nuit));
   scene.fog.color.copy(couleurBrume);
-  scene.fog.near = pluie ? TAILLE * .15 : TAILLE * 1.2; scene.fog.far = pluie ? TAILLE * 1.6 : TAILLE * 4;
   // la nuit, tout s'allume
   materiauxNuit.forEach(m => { m.emissiveIntensity = 1.3 * nuit; });
   matAmpoule.emissiveIntensity = 2.5 * nuit;
@@ -1352,8 +1402,8 @@ function majCiel(h) {
   pharesVoitures.material.opacity = .9 * nuit;
   halosQuais.forEach(hq => { hq.material.opacity = .9 * nuit; });
   matPhare.emissiveIntensity = .3 + 2.5 * nuit;
-  matNuage.opacity = .92 - .6 * nuit; matNuage.color.setScalar(pluie ? .65 : 1);
-  if (Math.abs(h - heureReflets) > .3 || pluieReflets !== pluie) { heureReflets = h; pluieReflets = pluie; majReflets(); }
+  matNuage.opacity = .92 - .6 * nuit;
+  if (Math.abs(h - heureReflets) > .3) { heureReflets = h; majReflets(); }
 }
 // Les ombres suivent ce que l'on regarde : nettes de près, larges de loin
 function majOmbres(cx, cz, distance) {
@@ -1366,11 +1416,11 @@ function majOmbres(cx, cz, distance) {
 }
 
 // =====================================================================
-// 11. La boucle d'animation
+// 10. La boucle d'animation
 // =====================================================================
 let avant = performance.now(), dernierEvenement = -2, dernierPanneau = 0, images = 0, debutMesure = performance.now() + 5000, lent = 0;
 const champHeure = document.getElementById("heure"), barreJour = document.getElementById("barreJour");
-const champCompteur = document.getElementById("compteur"), champTrafic = document.getElementById("trafic"), champMeteo = document.getElementById("meteo");
+const champCompteur = document.getElementById("compteur"), champTrafic = document.getElementById("trafic");
 const journal = document.getElementById("journal");
 camera.position.set(0, TAILLE * 1.1, TAILLE * 1.1);
 choisirVue(-1, false);
@@ -1400,11 +1450,9 @@ function image() {
     champTrafic.textContent = `🚦 ${tr.nom} · ×${virgule(tr.coef)}`;
     champTrafic.style.background = tr.coef >= 1.4 ? "#c0392b" : tr.coef > 1.05 ? "#e67e22" : "#27ae60";
   }
-  champMeteo.style.display = pluie ? "inline-block" : "none"; champMeteo.textContent = "🌧️ Pluie"; champMeteo.style.background = "#34627f";
   majCiel(heureLumiere(t));
-  nuages.children.forEach(n => { n.position.x += n.userData.v * dt * (pluie ? 2 : 1); if (n.position.x > maxX + 200) n.position.x = minX - 200; });
+  nuages.children.forEach(n => { n.position.x += n.userData.v * dt; if (n.position.x > maxX + 200) n.position.x = minX - 200; });
   avancerVoitures(dt * (lecture ? Math.min(vitesse, 3) : 0), tr.coef);
-  if (pluie) tomberPluie(dt);
 
   // Camions
   const clignote = (maintenant / 380 | 0) % 2 === 0;
@@ -1428,12 +1476,8 @@ function image() {
     cm.halosArriere.forEach(h => { h.material.opacity = frein ? .8 : .25 * nuit; });
     cm.halos.forEach(h => { h.material.opacity = .95 * nuit; });
     cm.matClignotant.emissiveIntensity = Math.abs(virage) > .35 && clignote ? 3 : 0;
-    if (e.livre && posBatiment[e.livre.client]) {
-      const b = posBatiment[e.livre.client], f = e.f;
-      cm.colis.visible = f < .95;
-      cm.colis.position.set(cm.x + (b.porteX - cm.x) * f, .45 + Math.sin(f * Math.PI) * 1.2, cm.z + (b.porteZ - cm.z) * f);
-    } else cm.colis.visible = false;
   });
+  animerLivreurs();
   if (maintenant - dernierPanneau > 150) {           // panneau des camions (pas à chaque image)
     dernierPanneau = maintenant;
     camions.forEach(cm => {
@@ -1449,7 +1493,9 @@ function image() {
   let modif = false;
   for (let i = 1; i < NB; i++) {
     const info = infoClient[i]; if (!info || !posBatiment[i]) continue;
-    const etat = t >= info.fin ? 2 : t >= info.arrivee ? 1 : 0;
+    const vis = info.vis || info, etat = t >= vis.fin ? 2 : t >= vis.arrivee ? 1 : 0;
+    const pose = t >= vis.debut + .55 * (vis.fin - vis.debut);
+    if (pose !== colisPose[i]) { colisPose[i] = pose; poserColis(i, pose); }
     if (etat === 1 || etat !== etatClient[i]) {
       const b = posBatiment[i], h = b.haut + (etat === 2 ? 4.6 : 6) + (etat === 1 ? Math.sin(maintenant / 150) * .6 : 0);
       const s = etat === 2 ? .7 : etat === 1 ? 1.3 : 1;
