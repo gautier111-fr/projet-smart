@@ -10,9 +10,9 @@ L'interface (`app.py`) n'est qu'un affichage : elle appelle les fonctions décri
 partie 12 répond aux questions sur le code lui-même, et la partie 13 liste **toutes** les
 fonctions du projet.
 
-### Le code en chiffres : 882 lignes de code (1 477 avec commentaires et lignes vides)
+### Le code en chiffres : 887 lignes de code (1 482 avec commentaires et lignes vides)
 
-Sans les commentaires, les docstrings et les lignes vides, il reste **882 lignes de code** (dont 253 pour GRASP + Tabou et 44 pour la PLNE). Le tableau donne les lignes totales.
+Sans les commentaires, les docstrings et les lignes vides, il reste **887 lignes de code** (dont 253 pour GRASP + Tabou et 44 pour la PLNE). Le tableau donne les lignes totales.
 
 | Fichier | Lignes | Rôle |
 |---|---|---|
@@ -21,7 +21,7 @@ Sans les commentaires, les docstrings et les lignes vides, il reste **882 lignes
 | `etude_statistique.py` | 172 | les 4 expériences de l'étude statistique |
 | `benchmark_vrplib.py` | 147 | le gap sur les instances de référence |
 | `probleme/contraintes.py` | 130 | vérification des solutions, trafic, gap |
-| `app.py` | 116 | l'interface |
+| `app.py` | 121 | l'interface |
 | `probleme/lorraine.py` | 111 | les 2 instances sur de vraies villes de Moselle |
 | `algorithmes/plne.py` | 64 | la méthode exacte |
 | `algorithmes/methodes.py` | 58 | le lien entre l'interface et les deux méthodes |
@@ -547,6 +547,19 @@ Avec un **test de Wilcoxon apparié** sur les 20 instances : il compare les deux
 instance par instance, sans supposer une loi normale. p < 0,05 : différence significative
 (alpha 0,1 : p = 0,022).
 
+**Pourquoi le gap n'est-il pas affiché avec le trafic ?**
+Les meilleures solutions connues (BKS) sont calculées **sans trafic**. Avec le trafic, le problème
+est plus contraint (certaines solutions de référence deviennent même irréalisables) : comparer
+les deux ne serait pas juste. Sur certaines instances (R101, RC105), le trafic rend même des
+clients impossibles à livrer : par exemple, le client 25 de R101 ne peut être servi qu'à 172-182 ;
+le retour part alors en heure de pointe (× 1,6) et arrive à 235,6, après la fermeture du dépôt
+(230). L'interface l'explique au lieu de calculer.
+
+**Pourquoi le gap change-t-il un peu d'un lancement à l'autre ?**
+L'arrêt se fait au temps : si l'ordinateur est occupé, il fait moins d'itérations dans le même
+temps. Exemple : RC205 en 19 s donne 11,91 % dans l'interface comme dans le benchmark, sur la
+même machine au même moment.
+
 **Pourquoi l'algorithme est-il moins bon sur les fenêtres larges ?**
 Les tournées sont longues et les combinaisons très nombreuses ; nos mouvements simples
 (déplacer ou échanger un client) explorent moins bien cet espace. Piste : des mouvements
@@ -571,11 +584,11 @@ le nombre de camions, le temps, les contraintes respectées ou non, la carte des
 le parcours de chaque camion. La carte est aussi un **suivi 2D** : à 100 moments de la journée (affichés en vrai horaire, « 7h29 », pour la Lorraine, et en % de la journée pour les autres instances, dont le temps est une unité abstraite égale à la distance),
 on calcule la position de chaque camion avec `np.interp` (il va en ligne droite d'un lieu au
 suivant et reste sur place pendant l'attente et la livraison), et le bouton ▶ fait défiler ces
-heures. Tout tient dans `app.py` (116 lignes, sans logique de calcul) : il n'y a rien à
+heures. Tout tient dans `app.py` (121 lignes, sans logique de calcul) : il n'y a rien à
 connaître de plus pour répondre sur la méthode.
 
 **Onglet « Suivi 3D (bonus) » :** c'est une option d'affichage ajoutée en plus, **hors programme et
-hors des 882 lignes** comptées plus haut. Tout son code est à part, dans le dossier `bonus_3d/` ;
+hors des 887 lignes** comptées plus haut. Tout son code est à part, dans le dossier `bonus_3d/` ;
 `app.py` ne fait que l'appeler (un onglet et 3 lignes marquées « BONUS »). Il ne calcule rien : il met en
 scène en 3D les tournées déjà vérifiées par `evaluer()` (mêmes heures que le suivi 2D). Il n'y a
 rien à en connaître pour expliquer la méthode.

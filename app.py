@@ -30,7 +30,12 @@ if not st.sidebar.button("▶ Lancer", type="primary"):
     st.stop()
 
 # 2. La résolution, puis la vérification de toutes les contraintes
-routes, temps = lancer(methode, inst, temps_max)
+try:
+    routes, temps = lancer(methode, inst, temps_max)
+except (ValueError, RuntimeError) as erreur:     # ex. avec le trafic, un client ne peut plus être livré à temps
+    st.error(f"❌ Aucune solution possible : {erreur}" + (" (même seul dans un camion, ce client ne peut pas "
+             "être livré dans son créneau et rentrer avant la fermeture, à cause du trafic)" if inst["trafic"] else ""))
+    st.stop()
 ev = evaluer(inst, routes)
 
 # 3. Le résultat
