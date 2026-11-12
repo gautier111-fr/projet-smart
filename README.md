@@ -41,6 +41,7 @@ Python 3.10 ou plus. `pulp` est fixé à la version 2.9.0 (la version 4 change l
 |---|---|
 | ouvrir l'interface | `streamlit run app.py` (ou double-clic sur `lancer_interface.bat`) |
 | le benchmark VRPLIB (20 instances, 20 s chacune) | `python benchmark_vrplib.py 20` |
+| les très grandes instances (R1_10_1, Flanders2) | `python benchmark_vrplib.py 20 grandes` |
 | l'étude statistique (environ 25 min) | `python etude_statistique.py` (ou `python etude_statistique.py 1 3` pour certaines expériences) |
 | tester le GRASP + Tabou seul | `python algorithmes/grasp_tabou_cvrptw.py` |
 
@@ -79,15 +80,17 @@ Règle de rangement : **à la racine, ce qu'on lance ; dans les dossiers, le cod
 
 ## Résultats en bref
 
-* **Benchmark VRPLIB** (20 instances Solomon et X, 20 s, une graine) : gap moyen **3,50 %**,
-  **19 instances sur 20 sous 7 %**, toutes les solutions valides (notebook, partie 7).
-* **Réglage alpha = 0,1** : gap moyen 4,98 % → 3,34 %, amélioration significative
-  (test de Wilcoxon, p = 0,022).
-* **Passage à l'échelle** (numpy, construction incrémentale, 30 plus proches voisins) :
-  X-n1001-k43 (1 000 clients, 60 s) passe de 37 % à **7,8 %**, Leuven1 (3 000 clients) **6,8 %**.
+* **Benchmark VRPLIB** (20 instances Solomon et X, 20 s, une graine) : gap moyen **1,87 %**,
+  **les 20 instances sous 7 %**, toutes les solutions valides (notebook, parties 7.3 et 7.4).
+* **Les étapes** : réglage alpha = 0,1 (4,98 % → 3,34 %, test de Wilcoxon p = 0,022), puis
+  2-opt\* et suppression de tournées (3,50 % → 1,87 %, p = 0,001).
+* **Passage à l'échelle** (numpy, construction incrémentale, plus proches voisins, 2-opt au-delà
+  de 500 clients) : X-n1001-k43 (1 000 clients, 60 s) passe de 37 % à **6,4 %**, Leuven1
+  (3 000 clients) **3,7 %** ; R1_10_1 (1 000 clients avec fenêtres) **7,1 %** et Flanders2
+  (30 000 clients, sans matrice des distances) **11,8 %** en 20 s.
 * **PLNE** : optimum prouvé jusqu'à 10 clients, retrouvé par GRASP + Tabou ; à 15 clients, la
-  PLNE ne prouve plus l'optimum en 60 s, GRASP + Tabou fait presque aussi bien en 5 s.
-* **Point faible** : les fenêtres larges (RC205 reste à 7,95 %).
+  PLNE ne prouve plus l'optimum en 60 s, et GRASP + Tabou fait mieux en 5 s (480,1 contre 489,0).
+* **Point faible** : les fenêtres larges sur de grandes instances (R2_10_1 : 26,8 %).
 
 ## Références
 

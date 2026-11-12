@@ -26,6 +26,7 @@ from scipy.spatial import cKDTree
 # Active / désactive le mouvement 2-opt dans le voisinage.
 # Sur nos tests (100 clients aléatoires) il n'améliorait pas le coût :
 # on le laisse en OPTION pour le comparer sur les instances VRPLIB.
+# Au-delà de SEUIL_KNN clients, il est toujours actif (voir voisinage).
 UTILISER_2OPT = False
 
 # Voisinage restreint : pour chaque client, on ne regarde que ses K plus proches
@@ -414,7 +415,9 @@ def voisinage(solution, taille_echantillon=None):
         #   a -> [c ... e] -> f   devient   a -> [e ... c] -> f
         #   seuls 2 arcs changent : (a,c) et (e,f) sont remplacés par (a,e) et (c,f)
         #   (le morceau du milieu garde la même longueur car dist est symétrique)
-        if not UTILISER_2OPT:
+        #   Toujours actif au-delà de SEUIL_KNN clients : les tournées sont longues et
+        #   l'ordre DANS une tournée compte beaucoup (X-n1001 : 8,9 % -> 6,5 %).
+        if not (UTILISER_2OPT or n - 1 > SEUIL_KNN):
             continue
         for p2 in range(p1 + 1, len(t1)):
             e = t1[p2]

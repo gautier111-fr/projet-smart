@@ -124,10 +124,14 @@ if __name__ == "__main__":
         "RC101", "RC102", "RC105", "RC201", "RC202", "RC205",
         # CVRP (pas de fenêtres)
         "X-n101-k25", "X-n110-k13",
-        # Très grandes instances
-        "R1_10_1",     # VRPTW Gehring & Homberger, 1000 clients
-        "Flanders2",   # CVRP Belgium, ~30 000 clients (attention mémoire)
     ]
+    # Grandes instances (partie 7.3) : python benchmark_vrplib.py 20 grandes
+    if "grandes" in sys.argv:
+        instances = [
+            "R1_10_1",     # VRPTW Gehring & Homberger, 1000 clients
+            "Flanders2",   # CVRP Belgique, ~30 000 clients
+        ]
+    suffixe = f"{TEMPS}s_grandes" if "grandes" in sys.argv else f"{TEMPS}s"
 
     resultats = []
     for nom in instances:
@@ -138,7 +142,7 @@ if __name__ == "__main__":
     df = pd.DataFrame(resultats)
     df["famille"] = df["instance"].str.extract(r"^([A-Z]+\d?)")[0]
     os.makedirs("resultats", exist_ok=True)
-    df.to_csv(f"resultats/resultats_{TEMPS}s.csv", index=False)
+    df.to_csv(f"resultats/resultats_{suffixe}.csv", index=False)
 
     print("\n=== Gap moyen par famille ===")
     print(df.groupby("famille")[["gap_%", "temps_s"]].mean().round(2))
@@ -152,4 +156,4 @@ if __name__ == "__main__":
     plt.title(f"Gap par instance (GRASP + Tabou, {TEMPS} s)")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"resultats/gap_par_instance_{TEMPS}s.png")
+    plt.savefig(f"resultats/gap_par_instance_{suffixe}.png")

@@ -23,7 +23,7 @@ déroule ce qui se passe quand on utilise l'interface, du lancement jusqu'au ré
 (ou clic droit sur l'onglet > *Ouvrir l'aperçu*). Les tableaux et les liens deviennent lisibles.
 
 **Les liens vers le code.** Chaque fois que le guide cite du code, il donne un lien de la forme
-📍 [`grasp_construction`, l. 150](algorithmes/grasp_tabou_cvrptw.py#L150). Dans l'aperçu,
+📍 [`grasp_construction`, l. 192](algorithmes/grasp_tabou_cvrptw.py#L192). Dans l'aperçu,
 **un clic ouvre le fichier directement à cette ligne** (ça marche aussi sur GitHub).
 
 **Les raccourcis utiles pendant la soutenance :**
@@ -190,81 +190,90 @@ Livrable 2, partie 1).
 | Lignes | Nom | Rôle |
 |---|---|---|
 | [1-16](algorithmes/grasp_tabou_cvrptw.py#L1) | en-tête | explication générale, format d'une solution |
-| [25-28](algorithmes/grasp_tabou_cvrptw.py#L25) | `UTILISER_2OPT` | interrupteur du mouvement 2-opt (désactivé) |
-| [30-37](algorithmes/grasp_tabou_cvrptw.py#L30) | `K_VOISINS`, `SEUIL_KNN` | au-delà de 500 clients, on ne teste que les 30 plus proches voisins |
-| [39-42](algorithmes/grasp_tabou_cvrptw.py#L39) | `depart`, `k_max` | ajout pour l'interface : heure de départ, nombre de camions |
-| [45](algorithmes/grasp_tabou_cvrptw.py#L45) | `trajet(i, j, heure)` | durée d'un trajet (remplacée quand le trafic est activé) |
-| **Partie 1** [l. 52](algorithmes/grasp_tabou_cvrptw.py#L52) | | **Les données** |
-| [57](algorithmes/grasp_tabou_cvrptw.py#L57) | `charger_instance(...)` | remplit les variables globales, calcule les distances et les plus proches voisins |
-| **Partie 2** [l. 102](algorithmes/grasp_tabou_cvrptw.py#L102) | | **Les fonctions de base** |
-| [105](algorithmes/grasp_tabou_cvrptw.py#L105) | `cout_tournee(tournee)` | distance d'une tournée, dépôt compris |
-| [115](algorithmes/grasp_tabou_cvrptw.py#L115) | `cout_solution(solution)` | somme des tournées = la fonction objectif |
-| [120](algorithmes/grasp_tabou_cvrptw.py#L120) | `tournee_valide(tournee)` | vrai / faux : capacité, fenêtres, retour au dépôt |
-| **Partie 3** [l. 147](algorithmes/grasp_tabou_cvrptw.py#L147) | | **La construction GRASP** |
-| [150](algorithmes/grasp_tabou_cvrptw.py#L150) | `grasp_construction(alpha)` | construit une solution de départ |
-| **Partie 4** [l. 214](algorithmes/grasp_tabou_cvrptw.py#L214) | | **Le voisinage** |
-| [231](algorithmes/grasp_tabou_cvrptw.py#L231) | `autour(tournee, p)` | le client d'avant et celui d'après |
-| [238](algorithmes/grasp_tabou_cvrptw.py#L238) | `voisinage(solution, ...)` | produit les mouvements possibles et leur coût |
-| [312](algorithmes/grasp_tabou_cvrptw.py#L312) | `tournees_modifiees(...)` | construit seulement les tournées changées par un mouvement |
-| [340](algorithmes/grasp_tabou_cvrptw.py#L340) | `clients_touches(...)` | les clients à rendre tabous |
-| [354](algorithmes/grasp_tabou_cvrptw.py#L354) | `mouvement_valide(...)` | le mouvement respecte-t-il les contraintes ? |
-| [359](algorithmes/grasp_tabou_cvrptw.py#L359) | `appliquer_mouvement(...)` | renvoie la nouvelle solution |
-| **Partie 5** [l. 368](algorithmes/grasp_tabou_cvrptw.py#L368) | | **La recherche tabou** |
-| [371](algorithmes/grasp_tabou_cvrptw.py#L371) | `recherche_tabou(...)` | améliore une solution |
-| **Partie 6** [l. 435](algorithmes/grasp_tabou_cvrptw.py#L435) | | **Le multi-start** |
-| [438](algorithmes/grasp_tabou_cvrptw.py#L438) | `grasp_tabou(...)` | répète construction + tabou, garde la meilleure |
-| [461](algorithmes/grasp_tabou_cvrptw.py#L461) | `verifier_solution(solution)` | contrôle final : chaque client une fois, tournées valides |
-| **Partie 7** [l. 468](algorithmes/grasp_tabou_cvrptw.py#L468) | | **Les tests** (quand on lance le fichier seul) |
+| [26-30](algorithmes/grasp_tabou_cvrptw.py#L26) | `UTILISER_2OPT` | interrupteur du mouvement 2-opt (désactivé jusqu'à 500 clients ; toujours actif au-delà) |
+| [32-39](algorithmes/grasp_tabou_cvrptw.py#L32) | `K_VOISINS`, `SEUIL_KNN` | au-delà de 500 clients, on ne teste que les 30 plus proches voisins |
+| [42](algorithmes/grasp_tabou_cvrptw.py#L42) | `UTILISER_2OPT_ETOILE` | interrupteur du mouvement 2-opt\* (activé) |
+| [46](algorithmes/grasp_tabou_cvrptw.py#L46) | `SEUIL_MATRICE` | au-delà de 5 000 clients, pas de matrice des distances |
+| [48-51](algorithmes/grasp_tabou_cvrptw.py#L48) | `depart`, `k_max` | ajout pour l'interface : heure de départ, nombre de camions |
+| [54](algorithmes/grasp_tabou_cvrptw.py#L54) | `trajet(i, j, heure)` | durée d'un trajet (remplacée quand le trafic est activé) |
+| **Partie 1** [l. 61](algorithmes/grasp_tabou_cvrptw.py#L61) | | **Les données** |
+| [65](algorithmes/grasp_tabou_cvrptw.py#L65) | `class Ligne` | très grandes instances : `dist[i][j]` calcule la distance à la demande au lieu de la lire dans une matrice |
+| [84](algorithmes/grasp_tabou_cvrptw.py#L84) | `charger_instance(...)` | remplit les variables globales, calcule les distances et les plus proches voisins |
+| **Partie 2** [l. 144](algorithmes/grasp_tabou_cvrptw.py#L144) | | **Les fonctions de base** |
+| [147](algorithmes/grasp_tabou_cvrptw.py#L147) | `cout_tournee(tournee)` | distance d'une tournée, dépôt compris |
+| [157](algorithmes/grasp_tabou_cvrptw.py#L157) | `cout_solution(solution)` | somme des tournées = la fonction objectif |
+| [162](algorithmes/grasp_tabou_cvrptw.py#L162) | `tournee_valide(tournee)` | vrai / faux : capacité, fenêtres, retour au dépôt |
+| **Partie 3** [l. 189](algorithmes/grasp_tabou_cvrptw.py#L189) | | **La construction GRASP** |
+| [192](algorithmes/grasp_tabou_cvrptw.py#L192) | `grasp_construction(alpha)` | construit une solution de départ |
+| [255](algorithmes/grasp_tabou_cvrptw.py#L255) | `construction_voisins()` | construction pour plus de 5 000 clients : le client suivant est cherché parmi les plus proches voisins du dernier |
+| **Partie 4** [l. 312](algorithmes/grasp_tabou_cvrptw.py#L312) | | **Le voisinage** |
+| [329](algorithmes/grasp_tabou_cvrptw.py#L329) | `autour(tournee, p)` | le client d'avant et celui d'après |
+| [336](algorithmes/grasp_tabou_cvrptw.py#L336) | `voisinage(solution, ...)` | produit les mouvements possibles et leur coût |
+| [429](algorithmes/grasp_tabou_cvrptw.py#L429) | `tournees_modifiees(...)` | construit seulement les tournées changées par un mouvement |
+| [462](algorithmes/grasp_tabou_cvrptw.py#L462) | `clients_touches(...)` | les clients à rendre tabous |
+| [477](algorithmes/grasp_tabou_cvrptw.py#L477) | `mouvement_valide(...)` | le mouvement respecte-t-il les contraintes ? |
+| [482](algorithmes/grasp_tabou_cvrptw.py#L482) | `appliquer_mouvement(...)` | renvoie la nouvelle solution |
+| [490](algorithmes/grasp_tabou_cvrptw.py#L490) | `supprimer_tournees(solution)` | essaie de vider les plus petites tournées en replaçant leurs clients ailleurs (un camion de moins) |
+| **Partie 5** [l. 530](algorithmes/grasp_tabou_cvrptw.py#L530) | | **La recherche tabou** |
+| [533](algorithmes/grasp_tabou_cvrptw.py#L533) | `recherche_tabou(...)` | améliore une solution |
+| **Partie 6** [l. 597](algorithmes/grasp_tabou_cvrptw.py#L597) | | **Le multi-start** |
+| [600](algorithmes/grasp_tabou_cvrptw.py#L600) | `grasp_tabou(...)` | répète construction + tabou, garde la meilleure |
+| [641](algorithmes/grasp_tabou_cvrptw.py#L641) | `verifier_solution(solution)` | contrôle final : chaque client une fois, tournées valides |
+| **Partie 7** [l. 648](algorithmes/grasp_tabou_cvrptw.py#L648) | | **Les tests** (quand on lance le fichier seul) |
 
 ##### Les passages importants
 
-**`charger_instance`** 📍 [l. 57](algorithmes/grasp_tabou_cvrptw.py#L57)
-- [l. 79-80](algorithmes/grasp_tabou_cvrptw.py#L79) : toutes les distances calculées **d'un coup** avec numpy (au lieu d'une double boucle).
-- [l. 81-84](algorithmes/grasp_tabou_cvrptw.py#L81) : l'arrondi des instances de référence (« dixieme » pour Solomon, « entier » pour X).
-- [l. 87](algorithmes/grasp_tabou_cvrptw.py#L87) : on repasse en liste Python, plus rapide pour lire une case à la fois.
-- [l. 89-98](algorithmes/grasp_tabou_cvrptw.py#L89) : pour chaque client, la liste de ses plus proches voisins (`proches`), triés par distance.
+**`charger_instance`** 📍 [l. 84](algorithmes/grasp_tabou_cvrptw.py#L84)
+- [l. 121-122](algorithmes/grasp_tabou_cvrptw.py#L121) : toutes les distances calculées **d'un coup** avec numpy (au lieu d'une double boucle).
+- [l. 123-126](algorithmes/grasp_tabou_cvrptw.py#L123) : l'arrondi des instances de référence (« dixieme » pour Solomon, « entier » pour X).
+- [l. 129](algorithmes/grasp_tabou_cvrptw.py#L129) : on repasse en liste Python, plus rapide pour lire une case à la fois.
+- [l. 131-140](algorithmes/grasp_tabou_cvrptw.py#L131) : pour chaque client, la liste de ses plus proches voisins (`proches`), triés par distance.
+- [l. 106-117](algorithmes/grasp_tabou_cvrptw.py#L106) : au-delà de 5 000 clients (« instance géante »), **pas de matrice** : `dist[i]` devient une `Ligne` qui calcule la distance à la demande, et les plus proches voisins sont trouvés avec un arbre de recherche (`cKDTree`, [l. 113](algorithmes/grasp_tabou_cvrptw.py#L113)). Le reste du code ne change pas : on écrit toujours `dist[i][j]`.
 
-**`tournee_valide`** 📍 [l. 120](algorithmes/grasp_tabou_cvrptw.py#L120) : on simule le trajet du camion.
-- [l. 126](algorithmes/grasp_tabou_cvrptw.py#L126) : capacité ;
-- [l. 133-134](algorithmes/grasp_tabou_cvrptw.py#L133) : fin de la livraison précédente, puis trajet ;
-- [l. 135](algorithmes/grasp_tabou_cvrptw.py#L135) : `max(t, a_i)` = **attente** si on arrive trop tôt ;
-- [l. 136](algorithmes/grasp_tabou_cvrptw.py#L136) : trop tard = interdit ;
-- [l. 140-143](algorithmes/grasp_tabou_cvrptw.py#L140) : retour au dépôt avant sa fermeture.
+**`tournee_valide`** 📍 [l. 162](algorithmes/grasp_tabou_cvrptw.py#L162) : on simule le trajet du camion.
+- [l. 168](algorithmes/grasp_tabou_cvrptw.py#L168) : capacité ;
+- [l. 175-176](algorithmes/grasp_tabou_cvrptw.py#L175) : fin de la livraison précédente, puis trajet ;
+- [l. 177](algorithmes/grasp_tabou_cvrptw.py#L177) : `max(t, a_i)` = **attente** si on arrive trop tôt ;
+- [l. 178](algorithmes/grasp_tabou_cvrptw.py#L178) : trop tard = interdit ;
+- [l. 182-185](algorithmes/grasp_tabou_cvrptw.py#L182) : retour au dépôt avant sa fermeture.
 
-**`grasp_construction`** 📍 [l. 150](algorithmes/grasp_tabou_cvrptw.py#L150)
-- [l. 162](algorithmes/grasp_tabou_cvrptw.py#L162) : au départ, tous les clients sont à livrer.
-- [l. 167](algorithmes/grasp_tabou_cvrptw.py#L167) : on ouvre un camion, et on garde sa **charge** et son **heure** au fil de la tournée.
-- [l. 173-183](algorithmes/grasp_tabou_cvrptw.py#L173) : les **candidats**, c'est-à-dire les clients qu'on peut ajouter à la fin de la tournée sans rien violer. Chacun est testé en O(1) grâce à la charge et à l'heure gardées : [l. 175](algorithmes/grasp_tabou_cvrptw.py#L175) capacité, [l. 178-179](algorithmes/grasp_tabou_cvrptw.py#L178) fenêtre, [l. 181](algorithmes/grasp_tabou_cvrptw.py#L181) retour au dépôt.
-- [l. 184](algorithmes/grasp_tabou_cvrptw.py#L184) : plus aucun candidat, donc on ferme la tournée et on ouvre un nouveau camion.
-- [l. 189](algorithmes/grasp_tabou_cvrptw.py#L189) : le **score** = distance + 0,1 × fin du créneau. On préfère les clients **proches et pressés**.
-- [l. 193-195](algorithmes/grasp_tabou_cvrptw.py#L193) : la **RCL** (liste restreinte de candidats) = ceux dont le score est sous `min + alpha × (max − min)`.
-- [l. 198](algorithmes/grasp_tabou_cvrptw.py#L198) : on en tire un **au hasard** : c'est le côté « randomisé » du GRASP.
-- [l. 207](algorithmes/grasp_tabou_cvrptw.py#L207) : si un client ne rentre même pas seul dans un camion, l'instance n'a pas de solution, donc erreur.
+**`grasp_construction`** 📍 [l. 192](algorithmes/grasp_tabou_cvrptw.py#L192)
+- [l. 204](algorithmes/grasp_tabou_cvrptw.py#L204) : au départ, tous les clients sont à livrer.
+- [l. 209](algorithmes/grasp_tabou_cvrptw.py#L209) : on ouvre un camion, et on garde sa **charge** et son **heure** au fil de la tournée.
+- [l. 215-225](algorithmes/grasp_tabou_cvrptw.py#L215) : les **candidats**, c'est-à-dire les clients qu'on peut ajouter à la fin de la tournée sans rien violer. Chacun est testé en O(1) grâce à la charge et à l'heure gardées : [l. 217](algorithmes/grasp_tabou_cvrptw.py#L217) capacité, [l. 220-221](algorithmes/grasp_tabou_cvrptw.py#L220) fenêtre, [l. 223](algorithmes/grasp_tabou_cvrptw.py#L223) retour au dépôt.
+- [l. 226](algorithmes/grasp_tabou_cvrptw.py#L226) : plus aucun candidat, donc on ferme la tournée et on ouvre un nouveau camion.
+- [l. 231](algorithmes/grasp_tabou_cvrptw.py#L231) : le **score** = distance + 0,1 × fin du créneau. On préfère les clients **proches et pressés**.
+- [l. 235-237](algorithmes/grasp_tabou_cvrptw.py#L235) : la **RCL** (liste restreinte de candidats) = ceux dont le score est sous `min + alpha × (max − min)`.
+- [l. 240](algorithmes/grasp_tabou_cvrptw.py#L240) : on en tire un **au hasard** : c'est le côté « randomisé » du GRASP.
+- [l. 249](algorithmes/grasp_tabou_cvrptw.py#L249) : si un client ne rentre même pas seul dans un camion, l'instance n'a pas de solution, donc erreur.
 
-**`voisinage`** 📍 [l. 238](algorithmes/grasp_tabou_cvrptw.py#L238) : c'est un **générateur** (`yield`). Il produit les mouvements un par un, avec leur variation de coût `delta`, sans jamais construire la nouvelle solution.
-- [l. 248-251](algorithmes/grasp_tabou_cvrptw.py#L248) : `position[client]` = (numéro de tournée, rang) ;
-- [l. 254-255](algorithmes/grasp_tabou_cvrptw.py#L254) : on ne regarde qu'un **échantillon** de 25 clients au hasard à chaque itération ;
-- [l. 262](algorithmes/grasp_tabou_cvrptw.py#L262) : ce qu'on gagne en retirant le client c (a → c → b devient a → b) ;
-- [l. 264-286](algorithmes/grasp_tabou_cvrptw.py#L264) : **relocate** = déplacer c juste avant ou juste après un de ses proches voisins, ou dans un nouveau camion s'il en reste ([l. 266](algorithmes/grasp_tabou_cvrptw.py#L266)) ;
-- [l. 288-297](algorithmes/grasp_tabou_cvrptw.py#L288) : **swap** = échanger c avec un proche voisin d'une autre tournée ;
-- [l. 299-309](algorithmes/grasp_tabou_cvrptw.py#L299) : **2-opt** = inverser un morceau de tournée (désactivé par `UTILISER_2OPT`).
+**`voisinage`** 📍 [l. 336](algorithmes/grasp_tabou_cvrptw.py#L336) : c'est un **générateur** (`yield`). Il produit les mouvements un par un, avec leur variation de coût `delta`, sans jamais construire la nouvelle solution.
+- [l. 346-349](algorithmes/grasp_tabou_cvrptw.py#L346) : `position[client]` = (numéro de tournée, rang) ;
+- [l. 352-353](algorithmes/grasp_tabou_cvrptw.py#L352) : on ne regarde qu'un **échantillon** de 25 clients au hasard à chaque itération ;
+- [l. 360](algorithmes/grasp_tabou_cvrptw.py#L360) : ce qu'on gagne en retirant le client c (a → c → b devient a → b) ;
+- [l. 362-384](algorithmes/grasp_tabou_cvrptw.py#L362) : **relocate** = déplacer c juste avant ou juste après un de ses proches voisins, ou dans un nouveau camion s'il en reste ([l. 364](algorithmes/grasp_tabou_cvrptw.py#L364)) ;
+- [l. 386-395](algorithmes/grasp_tabou_cvrptw.py#L386) : **swap** = échanger c avec un proche voisin d'une autre tournée ;
+- [l. 397-412](algorithmes/grasp_tabou_cvrptw.py#L397) : **2-opt\*** = couper deux tournées et échanger leurs fins (`[... c | b ...]` et `[... x | v ...]` deviennent `[... c, v ...]` et `[... x, b ...]`). Si c est le dernier client d'une tournée et v le premier d'une autre, les deux **fusionnent** : un camion de moins. La nouvelle tournée est construite [l. 445](algorithmes/grasp_tabou_cvrptw.py#L445) ;
+- [l. 414-426](algorithmes/grasp_tabou_cvrptw.py#L414) : **2-opt** = inverser un morceau de tournée : désactivé jusqu'à 500 clients, **toujours actif au-delà** ([l. 420](algorithmes/grasp_tabou_cvrptw.py#L420)).
 
-**`recherche_tabou`** 📍 [l. 371](algorithmes/grasp_tabou_cvrptw.py#L371)
-- [l. 384](algorithmes/grasp_tabou_cvrptw.py#L384) : la **liste tabou** = `deque(maxlen=10)`, les 10 derniers clients déplacés (le plus ancien sort tout seul).
-- [l. 393](algorithmes/grasp_tabou_cvrptw.py#L393) : on s'arrête après `iter_max` (30) itérations **sans amélioration** du record…
-- [l. 396](algorithmes/grasp_tabou_cvrptw.py#L396) : … ou quand le temps total est écoulé.
-- [l. 400-411](algorithmes/grasp_tabou_cvrptw.py#L400) : on cherche le **meilleur mouvement autorisé** :
-  - [l. 402](algorithmes/grasp_tabou_cvrptw.py#L402) : le coût est testé en premier (rapide) ;
-  - [l. 404-408](algorithmes/grasp_tabou_cvrptw.py#L404) : le **critère d'aspiration** autorise un mouvement tabou s'il bat le record ;
-  - [l. 410](algorithmes/grasp_tabou_cvrptw.py#L410) : la validité (capacité, fenêtres) n'est vérifiée qu'en dernier, car c'est le plus cher.
-- [l. 417-419](algorithmes/grasp_tabou_cvrptw.py#L417) : on applique le mouvement **même s'il est moins bon**, on rend les clients tabous, et on met le coût à jour par différence.
-- [l. 422-429](algorithmes/grasp_tabou_cvrptw.py#L422) : nouveau record → on remet le compteur à 0 ; sinon on l'augmente.
+**`recherche_tabou`** 📍 [l. 533](algorithmes/grasp_tabou_cvrptw.py#L533)
+- [l. 546](algorithmes/grasp_tabou_cvrptw.py#L546) : la **liste tabou** = `deque(maxlen=10)`, les 10 derniers clients déplacés (le plus ancien sort tout seul).
+- [l. 555](algorithmes/grasp_tabou_cvrptw.py#L555) : on s'arrête après `iter_max` (30) itérations **sans amélioration** du record…
+- [l. 558](algorithmes/grasp_tabou_cvrptw.py#L558) : … ou quand le temps total est écoulé.
+- [l. 562-573](algorithmes/grasp_tabou_cvrptw.py#L562) : on cherche le **meilleur mouvement autorisé** :
+  - [l. 564](algorithmes/grasp_tabou_cvrptw.py#L564) : le coût est testé en premier (rapide) ;
+  - [l. 566-570](algorithmes/grasp_tabou_cvrptw.py#L566) : le **critère d'aspiration** autorise un mouvement tabou s'il bat le record ;
+  - [l. 572](algorithmes/grasp_tabou_cvrptw.py#L572) : la validité (capacité, fenêtres) n'est vérifiée qu'en dernier, car c'est le plus cher.
+- [l. 579-581](algorithmes/grasp_tabou_cvrptw.py#L579) : on applique le mouvement **même s'il est moins bon**, on rend les clients tabous, et on met le coût à jour par différence.
+- [l. 584-591](algorithmes/grasp_tabou_cvrptw.py#L584) : nouveau record → on remet le compteur à 0 ; sinon on l'augmente.
 
-**`grasp_tabou`** 📍 [l. 438](algorithmes/grasp_tabou_cvrptw.py#L438) : la boucle multi-start.
-- [l. 445](algorithmes/grasp_tabou_cvrptw.py#L445) : construction ;
-- [l. 447](algorithmes/grasp_tabou_cvrptw.py#L447) : recherche tabou ;
-- [l. 451-452](algorithmes/grasp_tabou_cvrptw.py#L451) : on garde la meilleure ;
-- [l. 455](algorithmes/grasp_tabou_cvrptw.py#L455) : on s'arrête quand le temps est écoulé.
+**`supprimer_tournees`** 📍 [l. 490](algorithmes/grasp_tabou_cvrptw.py#L490) : on prend les tournées de la plus petite à la plus grande ([l. 500](algorithmes/grasp_tabou_cvrptw.py#L500)). Pour chacune, on replace chaque client au meilleur endroit valide d'une autre tournée. Si tous rentrent, la tournée disparaît ; sinon on annule ([l. 519-524](algorithmes/grasp_tabou_cvrptw.py#L519)). Le tabou seul n'y arrive pas : il faudrait plusieurs déplacements de suite dont certains allongent la distance.
+
+**`grasp_tabou`** 📍 [l. 600](algorithmes/grasp_tabou_cvrptw.py#L600) : la boucle principale. Trois cas selon la taille ([l. 609](algorithmes/grasp_tabou_cvrptw.py#L609) et [l. 613-627](algorithmes/grasp_tabou_cvrptw.py#L613)) :
+- **jusqu'à 500 clients : multi-start** ([l. 625-627](algorithmes/grasp_tabou_cvrptw.py#L625)) : construction + tabou, on recommence tant qu'il reste du temps ;
+- **de 500 à 5 000 clients : un seul départ long** ([l. 618-624](algorithmes/grasp_tabou_cvrptw.py#L618)) : construction, suppression de tournées, tabou jusqu'à la moitié du temps, nouvelle suppression, tabou jusqu'à la fin ;
+- **plus de 5 000 clients** ([l. 613-617](algorithmes/grasp_tabou_cvrptw.py#L613)) : `construction_voisins`, puis tabou jusqu'à la fin ;
+- [l. 631-632](algorithmes/grasp_tabou_cvrptw.py#L631) : on garde la meilleure ; [l. 635](algorithmes/grasp_tabou_cvrptw.py#L635) : on s'arrête quand le temps est écoulé (ou après l'unique départ).
 
 ##### 💬 Si on te demande…
 
@@ -293,15 +302,23 @@ n'est pas toujours à côté de ses voisins géographiques (RC2 passait de 5,2 %
 **Pourquoi un échantillon de 25 clients ?** Tester tous les clients à chaque itération serait trop
 lent sur les grandes instances, et le hasard de l'échantillon ajoute de la diversité.
 
-**Pourquoi le 2-opt est-il désactivé ?** Sur nos tests, il n'améliorait pas le coût. Il reste
-disponible en option (Livrable 2, partie 3 du notebook).
+**Pourquoi le 2-opt est-il désactivé jusqu'à 500 clients ?** Sur 100 clients, il n'améliorait pas
+le coût (Livrable 2, partie 3 du notebook). Au-delà de 500 clients, les tournées sont longues et
+l'ordre à l'intérieur d'une tournée compte beaucoup : il fait passer X-n1001 de 8,9 % à 6,4 % et
+Leuven1 de 5,5 % à 3,7 % (notebook, partie 7.3 c).
+
+**Quelle différence entre 2-opt et 2-opt\* ?** Le 2-opt **retourne** un morceau d'**une** tournée :
+avec des fenêtres de temps, l'ordre inversé est souvent interdit. Le 2-opt\* échange les **fins de
+deux** tournées sans rien retourner : le sens du temps est gardé, et il peut fusionner deux tournées.
+C'est lui qui a fait passer le gap moyen de 3,50 % à 1,87 % (notebook, partie 7.3, Wilcoxon p = 0,001).
 
 **Pourquoi le swap ne regarde-t-il que d'autres tournées ?** À l'intérieur d'une tournée, le
 relocate permet déjà de changer l'ordre.
 
-**Comment le nombre de camions peut-il baisser ?** Quand un relocate déplace le dernier client
-d'une tournée, celle-ci devient vide et `appliquer_mouvement` la supprime
-([l. 364](algorithmes/grasp_tabou_cvrptw.py#L364)).
+**Comment le nombre de camions peut-il baisser ?** De trois façons : un 2-opt\* qui fusionne deux
+tournées, `supprimer_tournees` qui vide une petite tournée d'un coup, ou un relocate qui déplace le
+dernier client d'une tournée : celle-ci devient vide et `appliquer_mouvement` la supprime
+([l. 487](algorithmes/grasp_tabou_cvrptw.py#L487)).
 
 **Quelle différence entre `iter_max` et l'heure de fin ?** `iter_max` termine **une** recherche
 tabou (on repart d'une nouvelle construction) ; l'heure de fin termine **tout**.
@@ -595,18 +612,19 @@ distances sont identiques.
 - entrepôt ouvert de 6h à 20h, 15 min par livraison ;
 - demandes et créneaux tirés au hasard avec une **graine fixe** ([l. 84](probleme/lorraine.py#L84)), donc toujours la même instance.
 
----
 
 ### 📁 `resultats/` : ce que produisent les expériences
 
 | Fichier | Produit par | Contenu |
 |---|---|---|
-| `resultats_20s.csv` / `gap_par_instance_20s.png` | `benchmark_vrplib.py` | **le benchmark final** : 20 instances, 20 s, graine 0 |
-| `resultats_20s_alpha02.csv`, `_alpha01.csv` (+ `.png`) | `benchmark_vrplib.py` | les versions précédentes (avant les améliorations), gardées pour le test de Wilcoxon |
-| `1_robustesse.csv` / `.png` | `etude_statistique.py` | 6 instances × 5 graines, 10 s |
-| `2_convergence.csv` / `.png` | `etude_statistique.py` | gap à 2, 5, 10 et 30 s |
-| `3_taille.csv` / `.png` | `etude_statistique.py` | de 100 à 3 000 clients, 60 s |
-| `4_sensibilite.csv` / `.png` | `etude_statistique.py` | effet de alpha et de la taille de la liste tabou |
+| `resultats_20s.csv` / `gap_par_instance_20s.png` | `benchmark_vrplib.py` | **le benchmark final** : 20 instances, 20 s, graine 0 (1,87 %) |
+| `resultats_20s_grandes.csv` / `.png` | `benchmark_vrplib.py 20 grandes` | R1_10_1 (1 000 clients avec fenêtres) et Flanders2 (30 000 clients) |
+| `resultats_20s_alpha02.csv`, `_alpha01.csv`, `_knn.csv` (+ `.png`) | `benchmark_vrplib.py` | les versions précédentes (4,98 %, 3,34 %, 3,50 %), gardées pour le test de Wilcoxon |
+| `1_robustesse.csv` / `.png` | `etude_statistique.py` | 6 instances × 5 graines, 10 s (version finale) |
+| `2_convergence.csv` / `.png` | `etude_statistique.py` | gap à 2, 5, 10 et 30 s (version finale) |
+| `3_taille.csv` / `.png` | `etude_statistique.py` | de 100 à 3 000 clients, 60 s (version finale) |
+| `4_sensibilite.csv` / `.png` | `etude_statistique.py` | effet de alpha et de la taille de la liste tabou (version finale) |
+| `*_v1` et `3_taille_v2` | `etude_statistique.py` | la même étude sur les versions précédentes (notebook 5 et 7.1) |
 
 Colonnes des CSV : `instance`, `graine`, `n` (clients), `camions`, `cout`, `bks`, `gap_%`,
 `temps_s`, `valide` (toutes les contraintes respectées), plus les paramètres testés.
@@ -673,16 +691,16 @@ connaît la meilleure solution, et on calcule le **gap**. Il est recopié dans l
 | Lignes | Nom | Rôle |
 |---|---|---|
 | [29](benchmark_vrplib.py#L29) | `telecharger(nom)` | télécharge l'instance si elle manque (utile sur Colab) |
-| [48](benchmark_vrplib.py#L48) | `charger_vrplib(nom)` | lit le `.vrp` et le `.sol`, prépare l'algorithme, renvoie la BKS |
-| [80](benchmark_vrplib.py#L80) | `tester(nom, graine, temps_max, …)` | lance GRASP + Tabou, renvoie une ligne de résultats |
-| [107](benchmark_vrplib.py#L107) | programme principal | les 20 instances, le CSV, le gap moyen par famille, le graphique |
+| [50](benchmark_vrplib.py#L50) | `charger_vrplib(nom)` | lit le `.vrp` et le `.sol`, prépare l'algorithme, renvoie la BKS |
+| [84](benchmark_vrplib.py#L84) | `tester(nom, graine, temps_max, …)` | lance GRASP + Tabou, renvoie une ligne de résultats |
+| [111](benchmark_vrplib.py#L111) | programme principal | les 20 instances, le CSV, le gap moyen par famille, le graphique |
 
-- [l. 71](benchmark_vrplib.py#L71) : le même arrondi que les références.
-- [l. 88-89](benchmark_vrplib.py#L88) : alpha automatique, comme dans l'interface.
-- [l. 92-94](benchmark_vrplib.py#L92) : les mêmes réglages que l'interface.
-- [l. 97](benchmark_vrplib.py#L97) : le gap.
-- [l. 101](benchmark_vrplib.py#L101) : `valide` = `verifier_solution`.
-- [l. 115-123](benchmark_vrplib.py#L115) : les 20 instances : 18 Solomon (3 par famille) + 2 X.
+- [l. 75](benchmark_vrplib.py#L75) : le même arrondi que les références.
+- [l. 92-93](benchmark_vrplib.py#L92) : alpha automatique, comme dans l'interface.
+- [l. 96-98](benchmark_vrplib.py#L96) : les mêmes réglages que l'interface.
+- [l. 101](benchmark_vrplib.py#L101) : le gap.
+- [l. 105](benchmark_vrplib.py#L105) : `valide` = `verifier_solution`.
+- [l. 119-127](benchmark_vrplib.py#L119) : les 20 instances : 18 Solomon (3 par famille) + 2 X.
 
 ---
 
@@ -809,10 +827,10 @@ Pendant le calcul, Streamlit affiche « Running… ». Voici ce qui s'exécute :
 1. [`methodes.py` l. 52](algorithmes/methodes.py#L52) `lancer` démarre le chronomètre et appelle la méthode choisie.
 2. **Si GRASP + Tabou :** [`methodes.py` l. 38](algorithmes/methodes.py#L38) `grasp_tabou` :
    1. `random.seed(0)` ([l. 41](algorithmes/methodes.py#L41)) ;
-   2. `preparer(instance)` ([l. 23](algorithmes/methodes.py#L23)) charge l'instance dans l'algorithme ([`charger_instance` l. 57](algorithmes/grasp_tabou_cvrptw.py#L57)), avec les distances, le départ, le nombre de camions et le trafic ;
-   3. `equipe.grasp_tabou(...)` ([l. 438](algorithmes/grasp_tabou_cvrptw.py#L438)) répète, jusqu'à la fin du temps :
-      - `grasp_construction` ([l. 150](algorithmes/grasp_tabou_cvrptw.py#L150)) : une solution de départ ;
-      - `recherche_tabou` ([l. 371](algorithmes/grasp_tabou_cvrptw.py#L371)) : à chaque itération, `voisinage` ([l. 238](algorithmes/grasp_tabou_cvrptw.py#L238)) propose des mouvements, `mouvement_valide` ([l. 354](algorithmes/grasp_tabou_cvrptw.py#L354)) vérifie les meilleurs avec `tournee_valide` ([l. 120](algorithmes/grasp_tabou_cvrptw.py#L120)), et `appliquer_mouvement` ([l. 359](algorithmes/grasp_tabou_cvrptw.py#L359)) passe au voisin choisi ;
+   2. `preparer(instance)` ([l. 23](algorithmes/methodes.py#L23)) charge l'instance dans l'algorithme ([`charger_instance` l. 84](algorithmes/grasp_tabou_cvrptw.py#L84)), avec les distances, le départ, le nombre de camions et le trafic ;
+   3. `equipe.grasp_tabou(...)` ([l. 600](algorithmes/grasp_tabou_cvrptw.py#L600)) répète, jusqu'à la fin du temps :
+      - `grasp_construction` ([l. 192](algorithmes/grasp_tabou_cvrptw.py#L192)) : une solution de départ ;
+      - `recherche_tabou` ([l. 533](algorithmes/grasp_tabou_cvrptw.py#L533)) : à chaque itération, `voisinage` ([l. 336](algorithmes/grasp_tabou_cvrptw.py#L336)) propose des mouvements, `mouvement_valide` ([l. 477](algorithmes/grasp_tabou_cvrptw.py#L477)) vérifie les meilleurs avec `tournee_valide` ([l. 162](algorithmes/grasp_tabou_cvrptw.py#L162)), et `appliquer_mouvement` ([l. 482](algorithmes/grasp_tabou_cvrptw.py#L482)) passe au voisin choisi ;
       - on garde la meilleure solution.
 3. **Si PLNE :** [`plne.py` l. 12](algorithmes/plne.py#L12) `plne_exacte` écrit le modèle, CBC le résout, et on reconstruit les tournées.
 4. `lancer` renvoie les tournées et le temps de calcul.
@@ -869,20 +887,24 @@ relu depuis le début (étape 1).
 
 | Mesure | Résultat | Où le montrer |
 |---|---|---|
-| Benchmark (20 instances, 20 s, graine 0) | gap moyen **3,50 %**, **19 / 20 sous 7 %**, toutes valides | `resultats/resultats_20s.csv` · notebook 4.1 et 7.2 |
-| Clients regroupés (C1, C2) | gap ≈ 0 % (C101, C105, C205 : meilleure solution retrouvée) | idem |
-| Plus difficile | fenêtres larges (R2, RC2) | idem |
+| Benchmark (20 instances, 20 s, graine 0) | gap moyen **1,87 %**, **20 / 20 sous 7 %** (pire : RC105, 5,83 %), toutes valides | `resultats/resultats_20s.csv` · notebook 7.3 et 7.4 |
+| Clients regroupés (C1, C2) | 0 % : meilleure solution retrouvée sur les 6 instances C | idem |
 | Réglage alpha 0,2 → 0,1 | 4,98 % → 3,34 %, **significatif** (Wilcoxon, p = 0,022) | notebook 6 et 8 |
 | Accélérations (100 clients) | 3,34 % → 3,50 %, non significatif (p = 0,50) | notebook 8 |
-| Passage à l'échelle (60 s) | X-n1001 : 37 % → **7,8 %** ; Leuven1 (3 000 clients) : **6,8 %** | `resultats/3_taille.csv` · notebook 5.3 et 7.1 |
-| Construction sur 1 000 clients | 4,14 s → 0,22 s | notebook 7 |
-| PLNE | optimum prouvé jusqu'à 10 clients, **retrouvé par GRASP + Tabou** ; à 15 clients, pas de preuve en 60 s | notebook 9 |
+| 2-opt\* + suppression de tournées | 3,50 % → **1,87 %**, **très significatif** (p = 0,001) | notebook 7.3 et 8 |
+| Passage à l'échelle (60 s) | X-n1001 : 37 % → **6,4 %** ; Leuven1 (3 000 clients) : **3,7 %** | `resultats/3_taille.csv` · notebook 7.4 |
+| Très grandes instances (20 s) | R1_10_1 (1 000 clients avec fenêtres) **7,1 %** ; Flanders2 (30 000 clients) **11,8 %** | `resultats/resultats_20s_grandes.csv` · notebook 7.3 |
+| Robustesse, convergence | écart-type ≤ 1,34 point ; tous les gaps sous 7 % dès 2 s | notebook 7.4 |
+| Construction sur 1 000 clients | 4,14 s → 0,22 s (partie 7) | notebook 7 |
+| PLNE | optimum prouvé jusqu'à 10 clients, **retrouvé par GRASP + Tabou** ; à 15 clients, pas de preuve en 60 s et GRASP + Tabou fait **mieux** (480,1 contre 489,0) | notebook 9 |
+| Point faible | fenêtres larges sur 1 000 clients (R2_10_1 : 26,8 %) | notebook 7.3 |
 
 ⚠️ **Pourquoi un chiffre peut changer d'un PC à l'autre.** GRASP + Tabou s'arrête au bout d'un
 **temps**, pas d'un nombre d'essais. Un PC plus lent ou occupé fait moins d'essais dans le même
 temps, et trouve parfois une solution un peu moins bonne. Sur le PC de démonstration, à 20 s,
-l'interface redonne **exactement** les chiffres du benchmark sur C101, C105, C201, C205, R105,
-R205 et RC101 : ce sont celles à montrer en direct. Les petites instances donnent toujours le
+l'interface redonne **exactement** les chiffres du benchmark sur C101, C105, C201, C205, R101,
+R105, R205, RC101, RC105 et RC201 : ce sont celles à montrer en direct (R201 et RC205 varient
+de quelques dixièmes). Les petites instances donnent toujours le
 même résultat (exemple du livrable 1 : 33,9 ; LOR-Metz-agglo : 113,2).
 
 💬 **« Je ne retrouve pas votre chiffre. »** L'arrêt se fait au temps, donc le résultat dépend de
@@ -937,16 +959,16 @@ Par ordre alphabétique. Un clic ouvre la fonction.
 | Fonction | Fichier | Ce qu'elle fait |
 |---|---|---|
 | [`afficher_suivi_3d`](bonus_3d/suivi_3d.py#L60) | `bonus_3d/suivi_3d.py` | affiche l'onglet 3D (bonus) |
-| [`appliquer_mouvement`](algorithmes/grasp_tabou_cvrptw.py#L359) | `algorithmes/grasp_tabou_cvrptw.py` | renvoie la solution après un mouvement |
-| [`autour`](algorithmes/grasp_tabou_cvrptw.py#L231) | `algorithmes/grasp_tabou_cvrptw.py` | le client d'avant et celui d'après |
-| [`charger_instance`](algorithmes/grasp_tabou_cvrptw.py#L57) | `algorithmes/grasp_tabou_cvrptw.py` | charge une instance dans l'algorithme (variables globales) |
+| [`appliquer_mouvement`](algorithmes/grasp_tabou_cvrptw.py#L482) | `algorithmes/grasp_tabou_cvrptw.py` | renvoie la solution après un mouvement |
+| [`autour`](algorithmes/grasp_tabou_cvrptw.py#L329) | `algorithmes/grasp_tabou_cvrptw.py` | le client d'avant et celui d'après |
+| [`charger_instance`](algorithmes/grasp_tabou_cvrptw.py#L84) | `algorithmes/grasp_tabou_cvrptw.py` | charge une instance dans l'algorithme (variables globales) |
 | [`charger_instance`](probleme/instances.py#L113) | `probleme/instances.py` | lit un fichier `.vrp` en dictionnaire instance |
-| [`charger_vrplib`](benchmark_vrplib.py#L48) | `benchmark_vrplib.py` | lit une instance pour le benchmark, renvoie la BKS |
-| [`clients_touches`](algorithmes/grasp_tabou_cvrptw.py#L340) | `algorithmes/grasp_tabou_cvrptw.py` | les clients à rendre tabous |
+| [`charger_vrplib`](benchmark_vrplib.py#L50) | `benchmark_vrplib.py` | lit une instance pour le benchmark, renvoie la BKS |
+| [`clients_touches`](algorithmes/grasp_tabou_cvrptw.py#L462) | `algorithmes/grasp_tabou_cvrptw.py` | les clients à rendre tabous |
 | [`coefficient_trafic`](probleme/contraintes.py#L30) | `probleme/contraintes.py` | coefficient de la tranche horaire |
 | [`construire_instance`](probleme/instances.py#L48) | `probleme/instances.py` | crée le dictionnaire instance |
-| [`cout_solution`](algorithmes/grasp_tabou_cvrptw.py#L115) | `algorithmes/grasp_tabou_cvrptw.py` | coût total (fonction objectif) |
-| [`cout_tournee`](algorithmes/grasp_tabou_cvrptw.py#L105) | `algorithmes/grasp_tabou_cvrptw.py` | distance d'une tournée |
+| [`cout_solution`](algorithmes/grasp_tabou_cvrptw.py#L157) | `algorithmes/grasp_tabou_cvrptw.py` | coût total (fonction objectif) |
+| [`cout_tournee`](algorithmes/grasp_tabou_cvrptw.py#L147) | `algorithmes/grasp_tabou_cvrptw.py` | distance d'une tournée |
 | [`creer_instance_lorraine`](probleme/lorraine.py#L73) | `probleme/lorraine.py` | construit une instance de Moselle |
 | [`donnees_scene`](bonus_3d/suivi_3d.py#L22) | `bonus_3d/suivi_3d.py` | prépare les données de la scène 3D (bonus) |
 | [`evaluer`](probleme/contraintes.py#L56) | `probleme/contraintes.py` | **vérifie toutes les contraintes**, calcule les horaires |
@@ -957,8 +979,8 @@ Par ordre alphabétique. Un clic ouvre la fonction.
 | [`experience_taille`](etude_statistique.py#L99) | `etude_statistique.py` | de 100 à 3 000 clients |
 | [`famille_instance`](probleme/instances.py#L84) | `probleme/instances.py` | famille déduite du nom |
 | [`gap`](probleme/contraintes.py#L126) | `probleme/contraintes.py` | écart en % à la référence |
-| [`grasp_construction`](algorithmes/grasp_tabou_cvrptw.py#L150) | `algorithmes/grasp_tabou_cvrptw.py` | **construction GRASP** |
-| [`grasp_tabou`](algorithmes/grasp_tabou_cvrptw.py#L438) | `algorithmes/grasp_tabou_cvrptw.py` | **multi-start** construction + tabou |
+| [`grasp_construction`](algorithmes/grasp_tabou_cvrptw.py#L192) | `algorithmes/grasp_tabou_cvrptw.py` | **construction GRASP** |
+| [`grasp_tabou`](algorithmes/grasp_tabou_cvrptw.py#L600) | `algorithmes/grasp_tabou_cvrptw.py` | **multi-start** construction + tabou |
 | [`grasp_tabou`](algorithmes/methodes.py#L38) | `algorithmes/methodes.py` | lance GRASP + Tabou depuis l'interface |
 | [`lancer`](algorithmes/methodes.py#L52) | `algorithmes/methodes.py` | lance et chronomètre une méthode |
 | [`lancer`](etude_statistique.py#L36) | `etude_statistique.py` | lance une série d'essais, enregistre le CSV |
@@ -966,15 +988,15 @@ Par ordre alphabétique. Un clic ouvre la fonction.
 | [`lister_instances_lorraine`](probleme/lorraine.py#L107) | `probleme/lorraine.py` | les 2 instances de Moselle |
 | [`matrice_distances`](probleme/instances.py#L25) | `probleme/instances.py` | distances + arrondi des références |
 | [`moment`](app.py#L62) | `app.py` | écrit une heure du suivi 2D |
-| [`mouvement_valide`](algorithmes/grasp_tabou_cvrptw.py#L354) | `algorithmes/grasp_tabou_cvrptw.py` | un mouvement respecte-t-il les contraintes ? |
+| [`mouvement_valide`](algorithmes/grasp_tabou_cvrptw.py#L477) | `algorithmes/grasp_tabou_cvrptw.py` | un mouvement respecte-t-il les contraintes ? |
 | [`plne_exacte`](algorithmes/plne.py#L12) | `algorithmes/plne.py` | **la PLNE** |
 | [`preparer`](algorithmes/methodes.py#L23) | `algorithmes/methodes.py` | charge l'instance dans l'algorithme, avec le trafic |
-| [`recherche_tabou`](algorithmes/grasp_tabou_cvrptw.py#L371) | `algorithmes/grasp_tabou_cvrptw.py` | **recherche tabou** |
+| [`recherche_tabou`](algorithmes/grasp_tabou_cvrptw.py#L533) | `algorithmes/grasp_tabou_cvrptw.py` | **recherche tabou** |
 | [`telecharger`](benchmark_vrplib.py#L29) | `benchmark_vrplib.py` | télécharge une instance manquante |
 | [`temps_trajet`](probleme/contraintes.py#L39) | `probleme/contraintes.py` | durée d'un trajet avec le trafic |
-| [`tester`](benchmark_vrplib.py#L80) | `benchmark_vrplib.py` | une instance → une ligne de résultats |
-| [`tournee_valide`](algorithmes/grasp_tabou_cvrptw.py#L120) | `algorithmes/grasp_tabou_cvrptw.py` | capacité, fenêtres, retour : vrai / faux |
-| [`tournees_modifiees`](algorithmes/grasp_tabou_cvrptw.py#L312) | `algorithmes/grasp_tabou_cvrptw.py` | les tournées changées par un mouvement |
-| [`trajet`](algorithmes/grasp_tabou_cvrptw.py#L45) | `algorithmes/grasp_tabou_cvrptw.py` | durée d'un trajet (remplacée avec le trafic) |
-| [`verifier_solution`](algorithmes/grasp_tabou_cvrptw.py#L461) | `algorithmes/grasp_tabou_cvrptw.py` | contrôle final d'une solution |
-| [`voisinage`](algorithmes/grasp_tabou_cvrptw.py#L238) | `algorithmes/grasp_tabou_cvrptw.py` | **les mouvements possibles et leur coût** |
+| [`tester`](benchmark_vrplib.py#L84) | `benchmark_vrplib.py` | une instance → une ligne de résultats |
+| [`tournee_valide`](algorithmes/grasp_tabou_cvrptw.py#L162) | `algorithmes/grasp_tabou_cvrptw.py` | capacité, fenêtres, retour : vrai / faux |
+| [`tournees_modifiees`](algorithmes/grasp_tabou_cvrptw.py#L429) | `algorithmes/grasp_tabou_cvrptw.py` | les tournées changées par un mouvement |
+| [`trajet`](algorithmes/grasp_tabou_cvrptw.py#L54) | `algorithmes/grasp_tabou_cvrptw.py` | durée d'un trajet (remplacée avec le trafic) |
+| [`verifier_solution`](algorithmes/grasp_tabou_cvrptw.py#L641) | `algorithmes/grasp_tabou_cvrptw.py` | contrôle final d'une solution |
+| [`voisinage`](algorithmes/grasp_tabou_cvrptw.py#L336) | `algorithmes/grasp_tabou_cvrptw.py` | **les mouvements possibles et leur coût** |
