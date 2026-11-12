@@ -21,6 +21,7 @@ import time
 from collections import deque
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 # Active / désactive le mouvement 2-opt dans le voisinage.
 # Sur nos tests (100 clients aléatoires) il n'améliorait pas le coût :
@@ -35,6 +36,13 @@ UTILISER_2OPT = False
 # de ses voisins géographiques (testé : RC2 passait de 5,2 % à 8,4 % de gap).
 K_VOISINS = 30
 SEUIL_KNN = 500
+
+# Active / désactive le mouvement 2-opt* (échange des fins de deux tournées).
+UTILISER_2OPT_ETOILE = True
+
+# Au-delà de SEUIL_MATRICE clients, on ne construit plus la matrice des distances :
+# elle ne tient pas en mémoire. Les distances sont calculées à la demande.
+SEUIL_MATRICE = 5000
 
 # AJOUT interface : réglages remplis par l'interface (voir algorithmes/methodes.py).
 # Avec ces valeurs par défaut, le code fonctionne exactement comme avant.
@@ -53,6 +61,24 @@ def trajet(i, j, heure):
 # =============================================================================
 # On stocke tout dans des variables globales, comme dans le workshop
 
+class Ligne:
+    """
+    Remplace une ligne de la matrice des distances pour les très grandes instances :
+    dist[i] est une Ligne, et dist[i][j] CALCULE la distance au moment où on la
+    demande. On écrit toujours dist[i][j] : le reste du code ne change pas.
+    """
+
+    def __init__(self, i):
+        self.x, self.y = X[i], Y[i]
+
+    def __getitem__(self, j):            # appelé par Python quand on écrit dist[i][j]
+        d = math.hypot(self.x - X[j], self.y - Y[j])
+        if ARRONDI == "entier":
+            return float(round(d))
+        if ARRONDI == "dixieme":
+            return math.floor(d * 10) / 10
+        return d
+
 
 def charger_instance(coords, demandes, Q_cap, fenetres=None, service=None,
                      arrondi=None):
@@ -66,13 +92,28 @@ def charger_instance(coords, demandes, Q_cap, fenetres=None, service=None,
     arrondi  : None (distance exacte), "dixieme" (tronquée à 0,1) ou "entier"
                -> conventions des instances de référence (voir benchmark)
     """
-    global n, q, Q, tw, s, dist, proches
+    global n, q, Q, tw, s, dist, proches, geante, X, Y, ARRONDI, arbre
 
     n = len(coords)                      # nombre de sommets (dépôt compris)
     q = list(demandes)
     Q = Q_cap
     tw = list(fenetres) if fenetres is not None else [(0, float("inf"))] * n
     s = list(service) if service is not None else [0] * n
+
+    # TRÈS grande instance : la matrice n x n ne tient pas en mémoire
+    # (30 000 clients = 900 millions de distances, environ 29 Go en listes Python).
+    geante = n - 1 > SEUIL_MATRICE
+    if geante:
+        c = np.array(coords, dtype=float)
+        X, Y, ARRONDI = c[:, 0].tolist(), c[:, 1].tolist(), arrondi
+        dist = [Ligne(i) for i in range(n)]          # dist[i][j] calculé à la demande
+        # K plus proches voisins avec un arbre de recherche spatiale (pas de matrice)
+        k = min(K_VOISINS or 30, n - 2)
+        arbre = cKDTree(c[1:])                       # les clients, sans le dépôt
+        _, idx = arbre.query(c, k=k + 1)             # +1 : chaque client se trouve lui-même
+        idx += 1                                     # indice dans l'arbre -> numéro de client
+        proches = [[j for j in ligne if j != i][:k] for i, ligne in enumerate(idx.tolist())]
+        return
 
     # PRÉ-CALCUL de la matrice des distances avec numpy (calcul vectorisé :
     # toutes les distances d'un coup, bien plus rapide qu'une double boucle)
@@ -210,6 +251,62 @@ def grasp_construction(alpha=0.3):
     return solution
 
 
+def construction_voisins():
+    """
+    Construction pour les TRÈS grandes instances (plus de SEUIL_MATRICE clients).
+    Même idée que le plus proche voisin, mais on ne cherche le client suivant que
+    parmi les K plus proches voisins du dernier client, au lieu de tous les clients
+    restants : sinon 30 000 clients = environ 450 millions de tests.
+    """
+    libre = [True] * n                               # libre[j] : j n'est pas encore livré
+    libre[0] = False
+    reste = n - 1
+    # pour démarrer une tournée : le client libre le plus proche du dépôt
+    ordre_depot = sorted(range(1, n), key=lambda j: dist[0][j])
+    curseur = 0
+    solution = []
+
+    while reste:
+        while not libre[ordre_depot[curseur]]:
+            curseur += 1
+        tournee, charge, heure, dernier = [], 0, depart, 0
+        candidats = [ordre_depot[curseur]]
+        while True:
+            # on garde les candidats qui respectent capacité et fenêtres de temps
+            fin = heure + s[dernier]
+            possibles = []
+            for j in candidats:
+                if charge + q[j] > Q:
+                    continue
+                arrivee = max(fin + trajet(dernier, j, fin), tw[j][0])
+                if arrivee > tw[j][1]:
+                    continue
+                if arrivee + s[j] + trajet(j, 0, arrivee + s[j]) > tw[0][1]:
+                    continue
+                possibles.append((dist[dernier][j], arrivee, j))
+            if not possibles:
+                break                                # plus rien ne rentre : on ferme la tournée
+            _, heure, dernier = min(possibles)       # le plus proche
+            charge += q[dernier]
+            tournee.append(dernier)
+            libre[dernier] = False
+            reste -= 1
+
+            # candidats suivants : les voisins encore libres du nouveau dernier client
+            candidats = [j for j in proches[dernier] if libre[j]]
+            k = len(proches[dernier])
+            while not candidats and reste and k < n - 1:
+                k = min(4 * k, n - 1)                # tous pris : on regarde plus loin
+                _, plus_loin = arbre.query([X[dernier], Y[dernier]], k=k)
+                candidats = [j + 1 for j in plus_loin.tolist() if libre[j + 1]]
+
+        if not tournee:
+            raise ValueError(f"Client impossible à servir : {candidats}")
+        solution.append(tournee)
+
+    return solution
+
+
 # =============================================================================
 # 4. VOISINAGE (équivalent de voisinage(sac) du workshop)
 # =============================================================================
@@ -296,6 +393,23 @@ def voisinage(solution, taille_echantillon=None):
                      + dist[e][c] + dist[c][f] - dist[e][d] - dist[d][f])
             yield delta, ("swap", r1, p1, r2, p2)
 
+        # ----- 2-OPT* : on échange les FINS de deux tournées -----
+        #   t1 = [... c | b ...]   et   t2 = [... x | v ...]
+        #   deviennent  [... c , v ...]   et   [... x , b ...]
+        #   Aucun morceau n'est retourné : le sens du temps est gardé (fenêtres).
+        #   Si c est le dernier de t1 et v le premier de t2, les deux tournées
+        #   FUSIONNENT : c'est ce mouvement qui fait baisser le nombre de camions.
+        if UTILISER_2OPT_ETOILE:
+            for v in proches[c]:
+                r2, pv = position[v]
+                if r2 == r1:
+                    continue
+                t2 = solution[r2]
+                x = t2[pv - 1] if pv > 0 else 0      # client juste avant v (0 = dépôt)
+                # 2 arcs retirés : (c,b) et (x,v)  /  2 arcs ajoutés : (c,v) et (x,b)
+                delta = dist[c][v] + dist[x][b] - dist[c][b] - dist[x][v]
+                yield delta, ("2opt*", r1, p1, r2, pv)
+
         # ----- 2-OPT : on inverse le morceau t1[p1..p2] DANS la même tournée -----
         #   a -> [c ... e] -> f   devient   a -> [e ... c] -> f
         #   seuls 2 arcs changent : (a,c) et (e,f) sont remplacés par (a,e) et (c,f)
@@ -325,6 +439,11 @@ def tournees_modifiees(solution, mouvement):
         # on garde le début, on inverse le morceau [p1..p2], on garde la fin
         return {r1: t[:p1] + t[p1:p2 + 1][::-1] + t[p2 + 1:]}
 
+    if type_mvt == "2opt*":
+        t1, t2 = solution[r1], solution[r2]
+        # début de t1 + fin de t2   /   début de t2 + fin de t1
+        return {r1: t1[:p1 + 1] + t2[p2:], r2: t2[:p2] + t1[p1 + 1:]}
+
     # relocate
     c = solution[r1][p1]
     t1 = solution[r1][:p1] + solution[r1][p1 + 1:]
@@ -343,6 +462,7 @@ def clients_touches(solution, mouvement):
       relocate : le client déplacé
       swap     : les 2 clients échangés
       2-opt    : les 2 extrémités du morceau inversé
+      2-opt*   : les 2 clients qu'on relie (c et v)
     Sans ça, le 2-opt pourrait ré-inverser le morceau juste après => boucle.
     """
     type_mvt, r1, p1, r2, p2 = mouvement
@@ -362,6 +482,45 @@ def appliquer_mouvement(solution, mouvement):
     for r, t in tournees_modifiees(solution, mouvement).items():
         nouvelle[r] = t
     return [t for t in nouvelle if t]    # on retire les tournées vides
+
+
+def supprimer_tournees(solution):
+    """
+    Essaie de vider les petites tournées en replaçant leurs clients ailleurs.
+    Le tabou seul n'y arrive pas : il faudrait déplacer tous les clients d'une
+    tournée un par un, et plusieurs de ces déplacements augmentent la distance.
+    Ici on vide la tournée d'un coup ; si un client ne rentre nulle part, on annule.
+    """
+    sol = [t[:] for t in solution]
+    charge = [sum(q[i] for i in t) for t in sol]
+
+    for r in sorted(range(len(sol)), key=lambda r: len(sol[r])):   # les plus petites d'abord
+        places = []                                  # (tournée, client) déjà replacés
+        for c in sol[r]:
+            meilleur, cout_min = None, float("inf")
+            for r2, t in enumerate(sol):
+                if r2 == r or not t or charge[r2] + q[c] > Q:
+                    continue                         # même tournée, vide, ou trop chargée
+                for p in range(len(t) + 1):          # toutes les positions d'insertion
+                    x = t[p - 1] if p > 0 else 0
+                    y = t[p] if p < len(t) else 0
+                    d = dist[x][c] + dist[c][y] - dist[x][y]
+                    if d < cout_min and tournee_valide(t[:p] + [c] + t[p:]):
+                        meilleur, cout_min = (r2, p), d
+            if meilleur is None:
+                break                                # ce client ne rentre nulle part
+            sol[meilleur[0]].insert(meilleur[1], c)
+            charge[meilleur[0]] += q[c]
+            places.append((meilleur[0], c))
+
+        if len(places) == len(sol[r]):
+            sol[r] = []                              # réussi : un camion de moins
+        else:
+            for r2, c in places:                     # échec : on remet tout comme avant
+                sol[r2].remove(c)
+                charge[r2] -= q[c]
+
+    return [t for t in sol if t]
 
 
 # =============================================================================
@@ -441,10 +600,28 @@ def grasp_tabou(nb_starts=10, alpha=0.3, taille_tabou=10, iter_max=50,
     meilleure, cout_meilleure = None, float("inf")
     debut = time.time()
 
+    # Grande instance (plus de SEUIL_KNN clients) avec un temps limite : UN SEUL
+    # départ, long. Recommencer de zéro ferait perdre le travail déjà fait, et la
+    # construction redonne presque la même solution à chaque fois.
+    un_seul_depart = bool(temps_max) and n - 1 > SEUIL_KNN
+
     for k in range(nb_starts):
-        sol = grasp_construction(alpha)
         fin = debut + temps_max if temps_max else None
-        sol = recherche_tabou(sol, taille_tabou, iter_max, taille_echantillon, fin)
+        if geante:
+            # très grande instance : construction rapide, puis tabou jusqu'à la fin du temps
+            sol = construction_voisins()
+            if fin:
+                sol = recherche_tabou(sol, taille_tabou, 10 ** 9, taille_echantillon, fin)
+        elif un_seul_depart:
+            # on vide des tournées, on améliore, on recommence une fois à mi-temps
+            sol = supprimer_tournees(grasp_construction(alpha))
+            sol = recherche_tabou(sol, taille_tabou, 10 ** 9, taille_echantillon,
+                                  debut + temps_max / 2)
+            sol = supprimer_tournees(sol)
+            sol = recherche_tabou(sol, taille_tabou, 10 ** 9, taille_echantillon, fin)
+        else:
+            sol = grasp_construction(alpha)
+            sol = recherche_tabou(sol, taille_tabou, iter_max, taille_echantillon, fin)
         c = cout_solution(sol)
         if verbose:
             print(f"start {k + 1:3d} : coût = {c:9.1f}  ({len(sol)} camions)")
@@ -452,7 +629,7 @@ def grasp_tabou(nb_starts=10, alpha=0.3, taille_tabou=10, iter_max=50,
             meilleure, cout_meilleure = sol, c
             if suivi:                    # AJOUT interface : courbe de convergence
                 suivi(k + 1, c)
-        if temps_max and time.time() - debut > temps_max:
+        if geante or un_seul_depart or (temps_max and time.time() - debut > temps_max):
             break
 
     return meilleure, cout_meilleure

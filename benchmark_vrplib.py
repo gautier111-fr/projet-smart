@@ -35,6 +35,8 @@ def telecharger(nom):
     os.makedirs("instances", exist_ok=True)
     if nom.startswith("X-"):
         dossier = "CVRP/"                    # instances X (100 à 1000 clients)
+    elif nom.startswith(("C", "R")) and "_10_" in nom:
+        dossier = "VRPTW/"                   # Gehring & Homberger 1000 clients : R1_10_1...
     elif nom.startswith(("C", "R")):
         dossier = "VRPTW/Solomon/"           # Solomon : C101, R201, RC105...
     else:
@@ -48,7 +50,9 @@ def telecharger(nom):
 def charger_vrplib(nom):
     """Lit instances/<nom>.vrp et .sol, prépare g, renvoie le coût optimal."""
     telecharger(nom)
-    inst = vrplib.read_instance(f"instances/{nom}.vrp")
+    # compute_edge_weights=False : sinon vrplib calcule lui-même la matrice complète
+    # des distances (impossible à 30 000 clients). On la calcule dans notre code.
+    inst = vrplib.read_instance(f"instances/{nom}.vrp", compute_edge_weights=False)
     bks = vrplib.read_solution(f"instances/{nom}.sol")["cost"]
 
     coords = inst["node_coord"].tolist()
@@ -120,6 +124,9 @@ if __name__ == "__main__":
         "RC101", "RC102", "RC105", "RC201", "RC202", "RC205",
         # CVRP (pas de fenêtres)
         "X-n101-k25", "X-n110-k13",
+        # Très grandes instances
+        "R1_10_1",     # VRPTW Gehring & Homberger, 1000 clients
+        "Flanders2",   # CVRP Belgium, ~30 000 clients (attention mémoire)
     ]
 
     resultats = []
