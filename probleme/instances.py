@@ -148,14 +148,13 @@ INSTANCES_INTERFACE = [
     "C101", "C105", "C201", "C205",                       # Solomon : clients regroupés
     "R101", "R105", "R201", "R205",                       # Solomon : clients aléatoires
     "RC101", "RC105", "RC201", "RC205",                   # Solomon : mixtes (série 1 = fenêtres serrées, 2 = larges)
-    "R2_10_1",                                            # Gehring & Homberger : 1 000 clients, fenêtres larges
     "X-n101-k25", "X-n200-k36", "X-n502-k39", "X-n1001-k43",   # CVRP (sans fenêtres) de 100 à 1 000 clients
     "Leuven1",                                            # CVRP : 3 000 clients
 ]
 
 
 def lister_instances():
-    """Les 21 instances de l'interface (dont les 2 de Lorraine). On ne lit que l'en-tête des fichiers."""
+    """Les 20 instances de l'interface (dont les 2 de Lorraine). On ne lit que l'en-tête des fichiers."""
     liste = []
     for nom in INSTANCES_INTERFACE:
         chemin = os.path.join(DOSSIER_INSTANCES, nom + ".vrp")

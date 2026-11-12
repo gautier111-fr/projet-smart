@@ -565,8 +565,8 @@ L'interface l'explique au lieu de planter ([`app.py` l. 35-38](app.py#L35)).
 | [84](probleme/instances.py#L84) | `famille_instance(nom)` | déduit la famille du nom (C, R, RC, X…) |
 | [113](probleme/instances.py#L113) | `charger_instance(chemin)` | lit un `.vrp` (et son `.sol` pour la BKS) |
 | [146](probleme/instances.py#L146) | `INSTANCES_INTERFACE` | les 18 fichiers proposés dans l'interface |
-| [157](probleme/instances.py#L157) | `lister_instances()` | la liste de l'interface (18 fichiers + 2 de Lorraine) |
-| [180](probleme/instances.py#L180) | `exemple_livrable1()` | l'exemple à 6 clients du livrable 1 (optimum 33,9) |
+| [156](probleme/instances.py#L156) | `lister_instances()` | la liste de l'interface (18 fichiers + 2 de Lorraine) |
+| [179](probleme/instances.py#L179) | `exemple_livrable1()` | l'exemple à 6 clients du livrable 1 (optimum 33,9) |
 
 ##### Les passages importants
 - **`matrice_distances`** [l. 33-41](probleme/instances.py#L33) : `np.hypot` calcule toutes les distances d'un coup ; puis « entier » (X), « troncature » au dixième (Solomon) ou « 0.1 » (exemple du livrable 1).
@@ -576,11 +576,11 @@ L'interface l'explique au lieu de planter ([`app.py` l. 35-38](app.py#L35)).
   - [l. 120](probleme/instances.py#L120) : lecture avec la bibliothèque `vrplib` ;
   - [l. 127-128](probleme/instances.py#L127) : le coût de référence vient du `.sol` ;
   - [l. 138](probleme/instances.py#L138) : arrondi « troncature » s'il y a des fenêtres, sinon « entier ».
-- **`lister_instances`** [l. 163-170](probleme/instances.py#L163) : on ne lit que l'**en-tête** des fichiers (rapide, même pour 3 000 clients) ; [l. 173](probleme/instances.py#L173) : tri par type, puis par taille.
+- **`lister_instances`** [l. 162-169](probleme/instances.py#L162) : on ne lit que l'**en-tête** des fichiers (rapide, même pour 3 000 clients) ; [l. 172](probleme/instances.py#L172) : tri par type, puis par taille.
 
 ##### 💬 Si on te demande…
-**Pourquoi ces 21 instances dans l'interface ?** Elles couvrent ce que le sujet demande
-d'analyser : la **taille** (8 à 3 000 clients, dont R2_10_1 : 1 000 clients avec fenêtres larges), la **répartition** des clients (regroupés,
+**Pourquoi ces 20 instances dans l'interface ?** Elles couvrent ce que le sujet demande
+d'analyser : la **taille** (8 à 3 000 clients), la **répartition** des clients (regroupés,
 aléatoires, mixtes) et les **contraintes** (sans fenêtres, serrées, larges). Les autres fichiers
 (C102, R102, X-n110-k13…) complètent le benchmark du notebook.
 
@@ -786,7 +786,7 @@ terminal). Le navigateur s'ouvre sur la page « 🚚 Tournées de livraison ».
 
 **Dans le code :**
 - 📍 [`app.py` l. 15-16](app.py#L15) : titre et mise en page.
-- 📍 [`app.py` l. 19](app.py#L19) : `lister_instances()` ([`instances.py` l. 157](probleme/instances.py#L157)) lit l'en-tête des 18 fichiers ; [`lorraine.py` l. 107](probleme/lorraine.py#L107) ajoute les 2 de Lorraine.
+- 📍 [`app.py` l. 19](app.py#L19) : `lister_instances()` ([`instances.py` l. 156](probleme/instances.py#L156)) lit l'en-tête des 18 fichiers ; [`lorraine.py` l. 107](probleme/lorraine.py#L107) ajoute les 2 de Lorraine.
 
 ### Étape 2 : choisir l'instance
 **À l'écran :** menu « Instance », à gauche. En premier, « Exemple du livrable 1 », puis les
@@ -794,7 +794,7 @@ instances triées par type (CVRP, puis CVRPTW) et par taille. Sous le titre s'af
 le nombre de clients, la capacité et la meilleure solution connue.
 
 **Dans le code :**
-- 📍 [`app.py` l. 20-21](app.py#L20) : `charger_instance(chemin)` ([`instances.py` l. 113](probleme/instances.py#L113)) ou `exemple_livrable1()` ([l. 180](probleme/instances.py#L180)).
+- 📍 [`app.py` l. 20-21](app.py#L20) : `charger_instance(chemin)` ([`instances.py` l. 113](probleme/instances.py#L113)) ou `exemple_livrable1()` ([l. 179](probleme/instances.py#L179)).
 - Les deux passent par `construire_instance` ([l. 48](probleme/instances.py#L48)) et `matrice_distances` ([l. 25](probleme/instances.py#L25)). Pour la Lorraine : `creer_instance_lorraine` ([`lorraine.py` l. 73](probleme/lorraine.py#L73)).
 - 📍 [`app.py` l. 26-27](app.py#L26) : la ligne d'information sous le titre.
 
@@ -972,7 +972,7 @@ Par ordre alphabétique. Un clic ouvre la fonction.
 | [`creer_instance_lorraine`](probleme/lorraine.py#L73) | `probleme/lorraine.py` | construit une instance de Moselle |
 | [`donnees_scene`](bonus_3d/suivi_3d.py#L22) | `bonus_3d/suivi_3d.py` | prépare les données de la scène 3D (bonus) |
 | [`evaluer`](probleme/contraintes.py#L56) | `probleme/contraintes.py` | **vérifie toutes les contraintes**, calcule les horaires |
-| [`exemple_livrable1`](probleme/instances.py#L180) | `probleme/instances.py` | l'exemple à 6 clients |
+| [`exemple_livrable1`](probleme/instances.py#L179) | `probleme/instances.py` | l'exemple à 6 clients |
 | [`experience_convergence`](etude_statistique.py#L76) | `etude_statistique.py` | gap selon le temps |
 | [`experience_robustesse`](etude_statistique.py#L52) | `etude_statistique.py` | 5 graines par instance |
 | [`experience_sensibilite`](etude_statistique.py#L135) | `etude_statistique.py` | effet de alpha et de la liste tabou |
@@ -984,7 +984,7 @@ Par ordre alphabétique. Un clic ouvre la fonction.
 | [`grasp_tabou`](algorithmes/methodes.py#L38) | `algorithmes/methodes.py` | lance GRASP + Tabou depuis l'interface |
 | [`lancer`](algorithmes/methodes.py#L52) | `algorithmes/methodes.py` | lance et chronomètre une méthode |
 | [`lancer`](etude_statistique.py#L36) | `etude_statistique.py` | lance une série d'essais, enregistre le CSV |
-| [`lister_instances`](probleme/instances.py#L157) | `probleme/instances.py` | les 21 instances de l'interface |
+| [`lister_instances`](probleme/instances.py#L156) | `probleme/instances.py` | les 20 instances de l'interface |
 | [`lister_instances_lorraine`](probleme/lorraine.py#L107) | `probleme/lorraine.py` | les 2 instances de Moselle |
 | [`matrice_distances`](probleme/instances.py#L25) | `probleme/instances.py` | distances + arrondi des références |
 | [`moment`](app.py#L62) | `app.py` | écrit une heure du suivi 2D |
