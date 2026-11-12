@@ -22,7 +22,7 @@ inst = charger_instance(chemins[nom]) if nom in chemins else exemple_livrable1()
 if st.sidebar.toggle("Trafic selon l'heure"):
     inst["trafic"] = inst.get("profil_trafic", PROFIL_TRAFIC_DEFAUT)
 methode = st.sidebar.radio("Méthode", [GRASP_TABOU] + ([PLNE] if inst["n"] <= 15 else []))
-temps_max = st.sidebar.slider("Temps de calcul maximum (s)", 1, 120, 10)
+temps_max = st.sidebar.slider("Temps de calcul maximum (s)", 1, 120, 20)   # 20 s, comme le benchmark
 st.caption(f"{inst['type']}, {inst['n']} clients, capacité {inst['capacite']:.0f}, "
            f"meilleure solution connue : {inst['bks'] or 'aucune'}")
 if not st.sidebar.button("▶ Lancer", type="primary"):
